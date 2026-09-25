@@ -358,7 +358,7 @@
       <div id="subtitle"><span class="h" id="subHeard"></span><span class="r" id="subResult"></span></div>
       <div id="hudBottom">
         <div class="stamina" id="stamina"><span>スタミナ</span><div class="bar"><i id="stamFill"></i></div></div>
-        <button class="chip-btn" id="camBtn">カメラ：背後（C）</button>
+        <button class="chip-btn" id="camBtn">カメラ：一人称（C）</button>
       </div>
       <div id="loadError" hidden>3D表示のプログラム（Three.js）を読み込めませんでした。<br>インターネットにつながっているか確認して、ページを再読み込みしてください。</div>
     </div>
@@ -447,13 +447,14 @@
       <li>大将の鉢巻きを取られたチームは全員退場。最後に残ったチームの勝ち（3分で判定）</li>
     </ul>
     <div class="keyline">
-      <span><kbd>↑↓←→</kbd> 押した方向に進む</span>
+      <span><kbd>↑↓</kbd> 前進・後退</span>
+      <span><kbd>←→</kbd> 向きを変える（組み合うと回り込み）</span>
       <span><kbd>Space</kbd> 取る</span>
       <span><kbd>Shift</kbd> ダッシュ</span>
       <span><kbd>Q</kbd> 相手を切替</span>
       <span><kbd>R</kbd> 気合い</span>
       <span><kbd>V</kbd> マイク</span>
-      <span><kbd>C</kbd> カメラ</span>
+      <span><kbd>C</kbd> カメラ（一人称・背後・全体）</span>
       <span>ゲームパッドにも対応</span>
     </div>
     <button class="primary" id="startBtn">スタート<small>Enter</small></button>
@@ -555,19 +556,34 @@ function fieldK(x, y) {
 // サウンド（Web Audio APIで合成：音声ファイル不要）
 // ============================================================
 const Sound = {
-  ctx: null, master: null, music: null, noiseBuf: null, crowdBuf: null, muted: false,
+  ctx: null, master: null, music: null, reverbIn: null, lowpass: null, noiseBuf: null, crowdBuf: null, muted: false,
   crowd: null, ducked: false,
-  bgm: { on: false, next: 0, step: 0, bpm: 116, intense: 0 },
+  bgm: { on: false, next: 0, step: 0, bpm: 120, intense: 0, last30: false },
   init() {
     try {
       if (!this.ctx) {
         const AC = window.AudioContext || window.webkitAudioContext;
         if (!AC) return;
-        this.ctx = new AC();
-        this.master = this.ctx.createGain();
-        this.master.gain.value = this.muted ? 0 : 0.5;
-        this.master.connect(this.ctx.destination);
-        this.music = this.ctx.createGain();   // 太鼓と歓声（あなたが話している間は小さくする）
+        const ctx = this.ctx = new AC();
+        // 音の通り道：それぞれの音 → master → lowpass（スローのときにこもらせる）→ コンプレッサー（音割れを防ぎ、迫力を出す）→ スピーカー
+        const comp = ctx.createDynamicsCompressor();
+        comp.threshold.value = -20; comp.knee.value = 10; comp.ratio.value = 4;
+        comp.attack.value = 0.004; comp.release.value = 0.2;
+        comp.connect(ctx.destination);
+        this.lowpass = ctx.createBiquadFilter();
+        this.lowpass.type = 'lowpass';
+        this.lowpass.frequency.value = 20000;
+        this.lowpass.connect(comp);
+        this.master = ctx.createGain();
+        this.master.gain.value = this.muted ? 0 : 0.75;
+        this.master.connect(this.lowpass);
+        // 会場の残響
+        const conv = ctx.createConvolver(), wet = ctx.createGain();
+        conv.buffer = this.makeImpulse(2.4, 2.8);
+        wet.gain.value = 0.5;
+        conv.connect(wet).connect(this.master);
+        this.reverbIn = conv;
+        this.music = ctx.createGain();   // 太鼓と歓声（あなたが話している間は小さくする）
         this.music.connect(this.master);
         this.noiseBuf = this.makeNoise(1);
         this.crowdBuf = this.makeNoise(4);
@@ -584,17 +600,42 @@ const Sound = {
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     return buf;
   },
+  makeImpulse(sec, decay) {
+    const rate = this.ctx.sampleRate, len = Math.floor(rate * sec);
+    const buf = this.ctx.createBuffer(2, len, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+    }
+    return buf;
+  },
   get ready() { return !!this.ctx && !this.muted && !game.demo; },
   setMuted(m) {
     this.muted = m;
-    if (this.master) this.master.gain.setTargetAtTime(m ? 0 : 0.5, this.ctx.currentTime, 0.02);
+    if (this.master) this.master.gain.setTargetAtTime(m ? 0 : 0.75, this.ctx.currentTime, 0.02);
   },
   env(g, t0, vol, attack, dur) {
     g.gain.setValueAtTime(0.0001, t0);
     g.gain.exponentialRampToValueAtTime(Math.max(vol, 0.0002), t0 + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
   },
-  // o.at：鳴らす時刻（省略時は今）、o.bus：つなぐ先（省略時は全体の音量）
+  // 音の出口：o.pan（左 -1 〜 右 1）、o.rev（残響の量）、o.bus（つなぐ先）
+  route(node, o) {
+    let last = node;
+    if (o.pan) {
+      const p = this.ctx.createStereoPanner();
+      p.pan.value = clamp(o.pan, -1, 1);
+      last.connect(p);
+      last = p;
+    }
+    last.connect(o.bus || this.master);
+    if (o.rev) {
+      const send = this.ctx.createGain();
+      send.gain.value = o.rev;
+      last.connect(send).connect(this.reverbIn);
+    }
+  },
+  // o.at：鳴らす時刻（省略時は今）
   tone(freq, dur, o = {}) {
     if (!this.ready) return null;
     const t0 = o.at ?? this.ctx.currentTime + (o.delay || 0);
@@ -603,7 +644,8 @@ const Sound = {
     osc.frequency.setValueAtTime(freq, t0);
     if (o.to) osc.frequency.exponentialRampToValueAtTime(o.to, t0 + dur);
     this.env(g, t0, o.vol ?? 0.25, o.attack ?? 0.008, dur);
-    osc.connect(g).connect(o.bus || this.master);
+    osc.connect(g);
+    this.route(g, o);
     osc.start(t0);
     osc.stop(t0 + dur + 0.05);
     return { osc, t0 };
@@ -619,13 +661,16 @@ const Sound = {
     f.frequency.setValueAtTime(o.freq || 1000, t0);
     if (o.to) f.frequency.exponentialRampToValueAtTime(o.to, t0 + dur);
     this.env(g, t0, o.vol ?? 0.2, o.attack ?? 0.01, dur);
-    src.connect(f).connect(g).connect(o.bus || this.master);
+    src.connect(f).connect(g);
+    this.route(g, o);
     src.start(t0, Math.random() * 0.5);
     src.stop(t0 + dur + 0.05);
   },
+
+  // ---------- 合図 ----------
   whistle(long) {   // ホイッスル
     const dur = long ? 1.1 : 0.5;
-    const t = this.tone(2800, dur, { vol: 0.13, attack: 0.02 });
+    const t = this.tone(2800, dur, { vol: 0.14, attack: 0.02, rev: 0.3 });
     if (!t) return;
     const lfo = this.ctx.createOscillator(), lg = this.ctx.createGain();
     lfo.frequency.value = 36;
@@ -636,39 +681,74 @@ const Sound = {
     this.noise(dur, { freq: 2900, q: 5, vol: 0.05 });
   },
   beep() { this.tone(880, 0.14, { type: 'square', vol: 0.06 }); },
-  capture(v = 1) {  // 鉢巻きを取った：チャイム＋歓声
-    this.tone(660, 0.14, { type: 'triangle', vol: 0.22 * v });
-    this.tone(990, 0.24, { type: 'triangle', vol: 0.22 * v, delay: 0.09 });
-    this.noise(1.4, { freq: 1300, q: 0.5, vol: 0.14 * v, attack: 0.15 });
-  },
-  hit(v = 1) {      // もみ合いの「バシッ」
-    this.tone(150, 0.1, { to: 60, vol: 0.35 * v });
-    this.noise(0.07, { freq: 2600, q: 0.8, vol: 0.2 * v });
-  },
-  fail(v = 1) { this.noise(0.2, { freq: 2200, to: 500, q: 1.2, vol: 0.16 * v }); },
-  whiff() { this.noise(0.14, { freq: 1600, to: 700, q: 1, vol: 0.07 }); },
-  bump() { this.tone(120, 0.12, { to: 55, vol: 0.2 }); },
-  drum() {  // 太鼓（ドーン）
-    this.tone(85, 0.7, { to: 40, vol: 0.45 });
-    this.noise(0.2, { filter: 'lowpass', freq: 500, vol: 0.25 });
-  },
   ack() {   // 指示が通った
     this.tone(1046, 0.08, { vol: 0.12 });
     this.tone(1568, 0.12, { vol: 0.1, delay: 0.07 });
   },
   nope() { this.tone(220, 0.16, { type: 'square', vol: 0.05 }); },
-  win() { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, i === 3 ? 0.6 : 0.2, { type: 'triangle', vol: 0.18, delay: i * 0.13 })); },
-  lose() { [392, 330, 262].forEach((f, i) => this.tone(f, i === 2 ? 0.8 : 0.3, { type: 'triangle', vol: 0.16, delay: i * 0.28 })); },
+  win() {
+    [523, 659, 784, 1047].forEach((f, i) => this.tone(f, i === 3 ? 0.9 : 0.22, { type: 'triangle', vol: 0.2, delay: i * 0.13, rev: 0.4 }));
+    this.roll(0.6, 0.9);
+    this.cheer(1.6);
+  },
+  lose() {
+    [392, 330, 262].forEach((f, i) => this.tone(f, i === 2 ? 1.2 : 0.35, { type: 'triangle', vol: 0.16, delay: i * 0.3, rev: 0.4 }));
+    this.gong(0.8);
+    this.aww(1);
+  },
 
-  // 仲間の掛け声：何人分かの声を重ねた「オーッ！」「エイ！」（vowel は 'o' や 'ei'）
-  chorus(vowel = 'o', dur = 0.6, v = 1, delay = 0) {
+  // ---------- 取り合いの音 ----------
+  capture(v = 1, pan = 0) {   // 鉢巻きを取った：チャイム＋歓声
+    this.tone(660, 0.14, { type: 'triangle', vol: 0.22 * v, pan });
+    this.tone(990, 0.3, { type: 'triangle', vol: 0.22 * v, delay: 0.09, pan, rev: 0.3 });
+    this.cheer(v);
+  },
+  impact(v = 1) {   // 自分が取った瞬間の重い一撃＋シンバル
+    this.tone(95, 0.9, { to: 34, vol: 0.7 * v, attack: 0.003, rev: 0.4 });
+    this.noise(0.35, { filter: 'lowpass', freq: 400, vol: 0.5 * v });
+    this.noise(1.4, { filter: 'highpass', freq: 5000, q: 0.5, vol: 0.12 * v, attack: 0.005, rev: 0.6 });
+  },
+  whoosh(v = 1, pan = 0) { this.noise(0.2, { freq: 500, to: 2600, q: 1.3, vol: 0.22 * v, attack: 0.03, pan }); },   // 手を伸ばす風切り音
+  hit(v = 1, pan = 0) {   // もみ合いの「バシッ」
+    this.tone(160, 0.12, { to: 60, vol: 0.45 * v, pan });
+    this.noise(0.08, { freq: 2600, q: 0.8, vol: 0.28 * v, pan, rev: 0.2 });
+  },
+  fail(v = 1, pan = 0) { this.noise(0.22, { freq: 2200, to: 500, q: 1.2, vol: 0.2 * v, pan }); },
+  whiff() { this.noise(0.14, { freq: 1600, to: 700, q: 1, vol: 0.07 }); },
+  bump(v = 1, pan = 0) {   // ぶつかった
+    this.tone(110, 0.16, { to: 45, vol: 0.4 * v, pan });
+    this.noise(0.1, { filter: 'lowpass', freq: 350, vol: 0.3 * v, pan });
+  },
+  step(v = 1, pan = 0) {   // 足音
+    this.tone(70 + Math.random() * 15, 0.09, { to: 42, vol: 0.32 * v, pan });
+    this.noise(0.07, { filter: 'lowpass', freq: 260 + Math.random() * 120, vol: 0.22 * v, pan });
+  },
+  heartbeat(v = 1) {   // 心臓の音（ドクン、ドクン）
+    this.tone(58, 0.14, { to: 40, vol: 0.55 * v });
+    this.tone(52, 0.16, { to: 38, vol: 0.4 * v, delay: 0.19 });
+  },
+  gong(v = 1) {   // 銅鑼
+    [[110, 1], [174, 0.6], [247, 0.4], [311, 0.3], [466, 0.2]].forEach(([f, a]) => this.tone(f, 3, { vol: 0.22 * v * a, attack: 0.01, rev: 0.6 }));
+    if (this.ready) this.don(this.ctx.currentTime, 0.8 * v);
+  },
+  muffle(sec) {   // スローモーションの間、音をこもらせる
+    if (!this.ctx) return;
+    const f = this.lowpass.frequency, t = this.ctx.currentTime;
+    f.cancelScheduledValues(t);
+    f.setTargetAtTime(650, t, 0.03);
+    f.setTargetAtTime(20000, t + sec, 0.25);
+  },
+
+  // ---------- 声 ----------
+  // 何人分かの声を重ねた掛け声（vowel は 'o'・'ei'・'ao' など。o.voices 人数、o.low 一番低い声、o.fall 下がっていく声）
+  chorus(vowel = 'o', dur = 0.6, v = 1, delay = 0, o = {}) {
     if (!this.ready) return;
     const F = { o: [500, 850], e: [450, 1900], i: [300, 2300], a: [750, 1250] };
     const t0 = this.ctx.currentTime + delay;
     const [a1, a2] = F[vowel[0]], [b1, b2] = F[vowel[vowel.length - 1]];
     const out = this.ctx.createGain();
     this.env(out, t0, 0.2 * v, 0.05, dur);
-    out.connect(this.master);
+    this.route(out, { bus: o.bus, rev: o.rev ?? 0.3 });
     const f1 = this.ctx.createBiquadFilter(), f2 = this.ctx.createBiquadFilter(), g2 = this.ctx.createGain();
     f1.type = f2.type = 'bandpass';
     f1.Q.value = 4; f2.Q.value = 6; g2.gain.value = 0.5;
@@ -676,34 +756,56 @@ const Sound = {
     f2.frequency.setValueAtTime(a2, t0); f2.frequency.linearRampToValueAtTime(b2, t0 + dur * 0.6);
     f1.connect(out);
     f2.connect(g2).connect(out);
-    for (let i = 0; i < 7; i++) {
-      const o = this.ctx.createOscillator(), base = 110 + Math.random() * 110, st = t0 + Math.random() * 0.05;
-      o.type = 'sawtooth';
-      o.frequency.setValueAtTime(base, st);
-      o.frequency.linearRampToValueAtTime(base * 1.15, st + dur * 0.35);
-      o.frequency.linearRampToValueAtTime(base * 0.92, st + dur);
-      o.connect(f1); o.connect(f2);
-      o.start(st); o.stop(st + dur + 0.05);
+    const voices = o.voices || 7, low = o.low || 110, spread = o.spread || 110;
+    for (let i = 0; i < voices; i++) {
+      const osc = this.ctx.createOscillator(), base = low + Math.random() * spread, st = t0 + Math.random() * 0.06;
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(base, st);
+      if (o.fall) {
+        osc.frequency.linearRampToValueAtTime(base * 1.05, st + dur * 0.2);
+        osc.frequency.linearRampToValueAtTime(base * 0.78, st + dur);
+      } else {
+        osc.frequency.linearRampToValueAtTime(base * 1.15, st + dur * 0.35);
+        osc.frequency.linearRampToValueAtTime(base * 0.92, st + dur);
+      }
+      osc.connect(f1); osc.connect(f2);
+      osc.start(st); osc.stop(st + dur + 0.05);
     }
     const n = this.ctx.createBufferSource(), ng = this.ctx.createGain();   // 息の音
     n.buffer = this.noiseBuf; ng.gain.value = 0.35;
     n.connect(ng); ng.connect(f1); ng.connect(f2);
     n.start(t0); n.stop(t0 + dur + 0.05);
   },
+  cheer(v = 1) {   // 観客の「わーっ！」
+    this.noise(2.2, { freq: 900, to: 1500, q: 0.6, vol: 0.22 * v, attack: 0.25, bus: this.music, rev: 0.5 });
+    this.noise(1.6, { filter: 'highpass', freq: 2400, q: 0.5, vol: 0.06 * v, attack: 0.3, bus: this.music });
+  },
+  ooh(v = 1) { this.chorus('o', 0.9, 0.55 * v, 0, { voices: 12, low: 85, spread: 70, bus: this.music, rev: 0.5 }); },           // 観客の「おおっ」
+  aww(v = 1) { this.chorus('ao', 1.6, 0.6 * v, 0, { voices: 12, low: 90, spread: 60, fall: true, bus: this.music, rev: 0.5 }); },  // 観客の「ああ〜」
 
-  // 観客のざわめき（ずっと流れる。盛り上がるほど大きく）
+  // ---------- 観客のざわめき（ずっと流れる。盛り上がるほど大きく） ----------
   startCrowd() {
     if (!this.ctx || this.crowd) return;
-    const src = this.ctx.createBufferSource(), bp = this.ctx.createBiquadFilter();
-    const amp = this.ctx.createGain(), lfo = this.ctx.createOscillator(), lg = this.ctx.createGain(), g = this.ctx.createGain();
-    src.buffer = this.crowdBuf; src.loop = true;
-    bp.type = 'bandpass'; bp.frequency.value = 850; bp.Q.value = 0.5;
-    amp.gain.value = 0.8;
-    lfo.frequency.value = 0.3; lg.gain.value = 0.2;
-    lfo.connect(lg).connect(amp.gain);
+    const ctx = this.ctx, g = ctx.createGain();
     g.gain.value = 0;
-    src.connect(bp).connect(amp).connect(g).connect(this.music);
-    src.start(); lfo.start();
+    g.connect(this.music);
+    const send = ctx.createGain();
+    send.gain.value = 0.25;
+    g.connect(send).connect(this.reverbIn);
+    // 低いどよめき
+    const a = ctx.createBufferSource(), af = ctx.createBiquadFilter();
+    a.buffer = this.crowdBuf; a.loop = true;
+    af.type = 'lowpass'; af.frequency.value = 520;
+    a.connect(af).connect(g);
+    // ゆらぐざわめき
+    const b = ctx.createBufferSource(), bf = ctx.createBiquadFilter(), amp = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
+    b.buffer = this.crowdBuf; b.loop = true;
+    bf.type = 'bandpass'; bf.frequency.value = 1100; bf.Q.value = 0.6;
+    amp.gain.value = 0.7;
+    lfo.frequency.value = 0.35; lg.gain.value = 0.3;
+    lfo.connect(lg).connect(amp.gain);
+    b.connect(bf).connect(amp).connect(g);
+    a.start(); b.start(0, 1.7); lfo.start();
     this.crowd = g;
   },
   setCrowd(level) { if (this.crowd) this.crowd.gain.setTargetAtTime(level, this.ctx.currentTime, 0.5); },
@@ -718,7 +820,7 @@ const Sound = {
     this.music.gain.setTargetAtTime(target, this.ctx.currentTime, 0.08);
   },
 
-  // 太鼓のBGM（少し先まで予約して鳴らす）
+  // ---------- 太鼓のBGM（少し先まで予約して鳴らす） ----------
   startBgm() { if (this.ctx) Object.assign(this.bgm, { on: true, next: this.ctx.currentTime + 0.05, step: 0 }); },
   stopBgm() { this.bgm.on = false; },
   tickBgm() {
@@ -732,18 +834,40 @@ const Sound = {
       b.step = (b.step + 1) % 32;
     }
   },
-  taiko(s, t, k) {   // 8分音符ごと。ドン（大太鼓）とカッ（締太鼓）
-    const beat = s % 8;
-    if ([0, 3, 4, 6].includes(beat)) this.don(t, beat === 0 ? 0.55 : 0.38);
-    else if (k > 0.6 && beat === 7) this.don(t, 0.25);
-    if (s >= 28 && k > 0.35) this.don(t + 30 / this.bgm.bpm, 0.25);   // 4小節ごとの連打
-    this.ka(t, (beat % 2 ? 0.03 : 0.055) * (0.5 + k));
+  // 8分音符ごと。k は盛り上がり（0〜1）
+  taiko(s, t, k) {
+    const b8 = s % 8, bar = Math.floor(s / 8) % 4, e = 60 / this.bgm.bpm / 2;
+    // 大太鼓：ドン・・ドン ドン・ドン・
+    if ([0, 3, 4, 6].includes(b8)) this.don(t, b8 === 0 ? 0.6 : 0.42);
+    if (k > 0.5 && b8 === 7) this.don(t, 0.3);
+    if (k > 0.7 && b8 === 5) this.don(t + e / 2, 0.28);   // ドドン
+    // 締太鼓：カッ・カッ（盛り上がると細かく）
+    this.ka(t, (b8 % 2 ? 0.035 : 0.06) * (0.6 + k));
+    if (k > 0.55 || this.bgm.last30) this.ka(t + e / 2, 0.03 * (0.6 + k));
+    // 観客の手拍子（2拍目と4拍目）
+    if (k > 0.3 && (b8 === 2 || b8 === 6)) this.clap(t, 0.12 * k);
+    // 4小節目の後半は連打で盛り上げる
+    if (bar === 3 && b8 >= 4 && k > 0.35) this.don(t + e / 2, 0.3 + 0.05 * (b8 - 4));
   },
-  don(t, v) {
-    this.tone(100, 0.4, { at: t, to: 46, vol: v, bus: this.music });
-    this.noise(0.08, { at: t, filter: 'lowpass', freq: 420, vol: v * 0.5, bus: this.music });
+  don(t, v) {   // 大太鼓：胴の響き＋低いうなり＋撥の当たり
+    this.tone(125, 0.6, { at: t, to: 48, vol: v, attack: 0.003, bus: this.music, rev: 0.35 });
+    this.tone(64, 0.75, { at: t, to: 38, vol: v * 0.7, attack: 0.003, bus: this.music });
+    this.noise(0.04, { at: t, freq: 1900, q: 0.8, vol: v * 0.3, bus: this.music });
+    this.noise(0.22, { at: t, filter: 'lowpass', freq: 320, vol: v * 0.45, bus: this.music });
   },
-  ka(t, v) { this.tone(1650, 0.045, { at: t, type: 'square', vol: v, bus: this.music }); },
+  ka(t, v) {    // 締太鼓
+    this.tone(1750, 0.04, { at: t, type: 'square', vol: v, bus: this.music });
+    this.noise(0.03, { at: t, filter: 'highpass', freq: 4200, vol: v * 0.8, bus: this.music, rev: 0.2 });
+  },
+  clap(t, v) {  // 大勢の手拍子
+    for (let i = 0; i < 5; i++) this.noise(0.07, { at: t + Math.random() * 0.025, freq: 1100 + Math.random() * 900, q: 1.3, vol: v, bus: this.music, rev: 0.4 });
+  },
+  bigDon(v = 1) { if (this.ready) this.don(this.ctx.currentTime, v); },
+  roll(dur = 1, v = 1) {   // だんだん速く強くなる連打
+    if (!this.ready) return;
+    const n = 14, t0 = this.ctx.currentTime;
+    for (let i = 0; i < n; i++) this.don(t0 + dur * (1 - Math.pow(1 - i / n, 1.4)), (0.2 + 0.45 * i / n) * v);
+  },
 };
 
 // ============================================================
@@ -781,6 +905,7 @@ const game = {
 const pumped = r => game.moraleT > 0 && !r.human && r.team === game.playerTeam && !game.demo;
 const keys = new Set();
 let grabQueued = false;
+const stepPhase = new Map();   // 足音を鳴らすための、各騎馬の歩みの位置
 
 function makeRider(team, num, x, y, heading) {
   return {
@@ -881,12 +1006,14 @@ function tryGrab(r, preferred) {
   r.grabAnim = GRAB_ANIM;
   r.stamina = Math.max(0, r.stamina - 6);
   const t = preferred && canGrab(r, preferred) ? preferred : findGrabTarget(r);
+  if (r.human) Sound.whoosh(1);
   if (!t) {
     r.grabAngle = r.heading;
     if (r.human) Sound.whiff();
     return;
   }
   r.grabAngle = angleTo(r, t);
+  if (t.human) Sound.whoosh(0.9, panFor(r.x, r.y));   // 自分に手が伸びてくる
   const v = r.human || t.human ? 1 : 0.4;
   if (Math.random() < grabChance(r, t)) {
     capture(r, t, v);
@@ -898,8 +1025,12 @@ function tryGrab(r, preferred) {
   t.vx += nx * 60;  t.vy += ny * 60;
   r.stagger = 0.55;
   popup(t.x, t.y, 'かわした！', { color: '#ffffff' });
-  Sound.fail(v);
-  if (r.human || t.human) { Sound.hit(0.8); shake(5); }
+  Sound.fail(v, panFor(t.x, t.y));
+  if (r.human || t.human) {
+    Sound.hit(0.9, r.human ? 0 : panFor(r.x, r.y));
+    Sound.ooh(0.8);   // 観客「おおっ」
+    shake(5);
+  }
 }
 
 function capture(r, t, v) {
@@ -914,7 +1045,7 @@ function capture(r, t, v) {
   popup(t.x, t.y, `${label(t)} 退場！`, { color: TEAMS[t.team].color });
   if (r.human) popup(r.x, r.y, '討ち取ったり！', { color: '#ffd54a', h: 150 });
   addLog(`${tagHtml(r)} が ${tagHtml(t)} の鉢巻きを取った`);
-  Sound.capture(v);
+  Sound.capture(v, panFor(t.x, t.y));
   game.hype = Math.min(1, game.hype + 0.35);
   for (const k of TEAM_KEYS) game.brainT[k] = Math.min(game.brainT[k], 0.05);   // すぐに作戦を立て直す
   reactToCapture(r, t);
@@ -928,7 +1059,7 @@ function reactToCapture(r, t) {
   const own = game.playerTeam;
   if (me.alive && dist(me, t) < 280) shake(r.human ? 14 : 6);
   if (r.human) {
-    Sound.hit(1);
+    Sound.impact(1);
     slowmo(0.6, 0.3);
     flash();
     teamCheer(['さすが大将！', '大将に続けえ！', 'うおおお！', 'お見事！'], 'さすが大将！');
@@ -954,12 +1085,15 @@ function eliminateTeam(team, by) {
   }
   showBanner(`${T.full} 敗退！`, T.color, 1.8);
   addLog(`<b>${T.full}の大将が討たれた。${T.full}は全員退場！</b>`);
-  Sound.drum();
+  Sound.gong(1);
+  Sound.cheer(1.3);
   const left = TEAM_KEYS.filter(k => !game.teamOut[k]);
   if (!game.demo) {
     shake(10);
     if (team === game.playerTeam) {
       slowmo(1.0, 0.25);
+      Sound.impact(0.8);
+      Sound.aww(1.2);
     } else {
       if (by && by.team === game.playerTeam) { slowmo(0.8, 0.3); flash(); }
       const rest = left.filter(k => k !== game.playerTeam);
@@ -1408,7 +1542,8 @@ function collide(a, b) {
     b.vx += nx * j; b.vy += ny * j;
     if ((a.human || b.human) && -rv > 80 && game.elapsed - game.lastBump > 0.25) {
       game.lastBump = game.elapsed;
-      Sound.bump();
+      const other = a.human ? b : a;
+      Sound.bump(Math.min(1.2, -rv / 120), panFor(other.x, other.y));
     }
   }
 }
@@ -1498,6 +1633,10 @@ function tickCountdown(dt) {
   } else {
     showBanner('はじめ！', '#ffd54a', 1.1);
     Sound.whistle(false);
+    Sound.bigDon(1);
+    Sound.impact(0.5);
+    Sound.cheer(1.3);
+    shake(6);
     Sound.startBgm();
     game.hype = 0.5;
     game.state = 'playing';
@@ -1509,8 +1648,9 @@ function rallyStep(n) {
   const last = n === 1;
   showBanner(last ? 'おーーっ！' : 'えい！', last ? '#ffd54a' : '#ffffff', 0.9);
   Sound.chorus(last ? 'o' : 'ei', last ? 0.9 : 0.35, last ? 1.3 : 1);
+  Sound.bigDon(last ? 1 : 0.75);
   for (const r of game.riders) if (r.team === game.playerTeam) r.cheerT = last ? 1.3 : 0.45;
-  if (last) shake(5);
+  if (last) { shake(5); Sound.cheer(0.8); }
 }
 
 // 大将（あなた）が囲まれそう・背後を取られそうなとき、仲間が叫ぶ
@@ -1532,7 +1672,10 @@ function checkDanger() {
 // 残り30秒
 function lastSpurt() {
   showBanner('残り30秒！', '#ff7b72', 1.4);
-  Sound.bgm.bpm = 140;
+  Sound.bgm.bpm = 144;
+  Sound.bgm.last30 = true;
+  Sound.roll(1.2);
+  Sound.cheer(1);
   bark(pickAlly(), '押し切れえ！', { say: '残り30秒！押し切るぞ！', prio: 3 });
   Sound.chorus('o', 0.6, 0.9, 0.3);
 }
@@ -2474,8 +2617,15 @@ function makeRiderModel(r) {
   aura.renderOrder = 2;
   aura.visible = false;
   root.add(aura);
+  // この騎馬だけの材質にする（一人称で、目の前の味方を半透明にできるように）
+  const own = new Map();
+  root.traverse(o => {
+    if (!o.isMesh || o === aura) return;
+    if (!own.has(o.material)) own.set(o.material, o.material.clone());
+    o.material = own.get(o.material);
+  });
   scene.add(root);
-  return { root, body, bearers, rider, head, hair, band, tails, armL, handL, armR, handR, flag, aura, poofed: false };
+  return { root, body, bearers, rider, head, hair, band, tails, armL, handL, armR, handR, flag, aura, mats: [...own.values()], fade: 1, poofed: false };
 }
 const AURA_GEO = new THREE.RingGeometry(28, 46, 40);
 const AURA_MAT = new THREE.MeshBasicMaterial({ color: '#ff9a3c', transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending });
@@ -2623,7 +2773,7 @@ const models = new Map();
 function rebuildWorld() {
   for (const m of models.values()) {
     scene.remove(m.root);
-    m.flag.material.dispose();
+    for (const mt of m.mats) mt.dispose();
   }
   models.clear();
   for (const r of game.riders) models.set(r.id, makeRiderModel(r));
@@ -2652,6 +2802,20 @@ function syncRider(r, m, time) {
   // 一人称のときは自分の頭を隠す（カメラが頭の位置にあるため）
   const fp = r.human && cam.mode === 'first' && !game.demo;
   m.head.visible = m.hair.visible = !fp;
+  // 一人称のとき、すぐ近くにいて視界をふさぐ味方は半透明に
+  let fade = 1;
+  if (cam.mode === 'first' && !game.demo && !r.human && r.team === game.playerTeam) {
+    const d = Math.hypot(wx(r.x) - camera.position.x, wz(r.y) - camera.position.z);
+    if (d < 110) fade = clamp((d - 45) / 65, 0.25, 1);
+  }
+  if (Math.abs(fade - m.fade) > 0.02 || (fade === 1 && m.fade !== 1)) {
+    const was = m.fade < 1, now = fade < 1;
+    m.fade = fade;
+    for (const mt of m.mats) {
+      mt.opacity = fade;
+      if (was !== now) { mt.transparent = now; mt.depthWrite = !now; mt.needsUpdate = true; }
+    }
+  }
   // 鉢巻き（動くとなびく）
   m.band.visible = r.alive && !fp;
   m.tails.forEach((t, i) => {
@@ -2737,14 +2901,14 @@ function syncMarkers(time) {
 }
 
 // ---------- カメラ ----------
-//   背後：主人公を背中側から映す（標準）／一人称：騎手の目の高さ／全体：会場を見下ろす
+//   一人称：騎手の目の高さ（標準）／背後：主人公を背中側から映す／全体：会場を見下ろす
 const CAM_MODES = {
   behind:   { label: '背後',   fov: 58 },
   first:    { label: '一人称', fov: 70 },
   overview: { label: '全体',   fov: 40 },
 };
-const CAM_ORDER = ['behind', 'first', 'overview'];
-const cam = { mode: 'behind', pos: new V3(0, 900, 900), look: new V3(), yaw: 0, shake: 0, fov: 40 };
+const CAM_ORDER = ['first', 'behind', 'overview'];
+const cam = { mode: 'first', pos: new V3(0, 900, 900), look: new V3(), yaw: 0, shake: 0, fov: 40, snap: false };
 const camTarget = new V3(), lookTarget = new V3();
 const ELEV = 0.95;   // 俯瞰の角度（ラジアン）
 function overviewDistance() {
@@ -2782,7 +2946,11 @@ function updateCamera(dt, time) {
       lookTarget.set(px + dx * 200, 50, pz + dz * 200);
       follow = 9;
     } else {
-      camTarget.set(px + dx * 2, 90, pz + dz * 2);
+      // 一人称：騎手の目の位置。走ると上下・左右に揺れる
+      const k = Math.min(1, Math.hypot(me.vx, me.vy) / 110);
+      const bob = me.alive ? Math.abs(Math.sin(me.step * 1.6)) * 2.6 * k : -14;
+      const sway = Math.sin(me.step * 0.8) * 1.4 * k;
+      camTarget.set(px + dx * 2 - dz * sway, 90 + bob, pz + dz * 2 + dx * sway);
       lookTarget.set(px + dx * 220, 5, pz + dz * 220);
       follow = 30;
     }
@@ -2794,7 +2962,8 @@ function updateCamera(dt, time) {
   if (Math.abs(camera.fov - cam.fov) > 0.05) { camera.fov = cam.fov; camera.updateProjectionMatrix(); }
   speedLinesEl.classList.toggle('on', !!dashing);
 
-  const s = 1 - Math.exp(-follow * dt);
+  const s = cam.snap ? 1 : 1 - Math.exp(-follow * dt);   // 試合開始の瞬間は、いきなりその視点に
+  cam.snap = false;
   cam.pos.lerp(camTarget, s);
   cam.look.lerp(lookTarget, s);
   camera.position.copy(cam.pos);
@@ -3167,13 +3336,19 @@ function startMatch() {
   pauseEl.hidden = true;
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   cam.yaw = humanRider().heading;
+  cam.snap = true;
+  cam.fov = CAM_MODES[cam.mode].fov;
   addLog(`${TEAMS[game.playerTeam].full}の大将として出陣！`);
-  addLog('↑↓←→ で押した方向に進む。敵に近づくと自動で組み合い、←→で回り込める');
+  addLog(cam.mode === 'first'
+    ? '↑↓で前進・後退、←→で向きを変える。敵と組み合うと←→で回り込める。C でカメラ切替'
+    : '↑↓←→ で押した方向に進む。敵に近づくと自動で組み合い、←→で回り込める');
   if (!voice.on) addLog('V キーでマイクをONにすると、声で味方に指示できます');
   game.state = 'countdown';
   game.countdown = 3;
   Sound.startCrowd();
-  Sound.bgm.bpm = 116;
+  Sound.bgm.bpm = 120;
+  Sound.bgm.last30 = false;
+  stepPhase.clear();
   rallyStep(3);
 }
 
@@ -3227,7 +3402,7 @@ function showResult() {
   Sound.setCrowd(win ? 0.07 : 0);
   if (win) {
     Sound.win();
-    Sound.chorus('o', 1.2, 1.3, 0.3);
+    Sound.chorus('o', 1.4, 1.4, 0.3);
     Talk.say('勝ったぞおおお！', { pitch: 0.9, prio: 3 });
   } else {
     Sound.lose();
@@ -3345,7 +3520,11 @@ document.querySelectorAll('#diffChoices .choice').forEach(b => b.addEventListene
 let lastT = performance.now(), acc = 0, hudT = 0;
 let slowT = 0, slowScale = 1;
 // スローモーション（dur 秒のあいだ、scale 倍の速さ）
-function slowmo(dur, scale) { slowT = dur; slowScale = scale; }
+function slowmo(dur, scale) {
+  slowT = dur;
+  slowScale = scale;
+  Sound.muffle(dur);
+}
 function frame(now) {
   const realDt = Math.min(0.1, (now - lastT) / 1000);
   lastT = now;
@@ -3360,6 +3539,7 @@ function frame(now) {
     acc = 0;
   }
   updateAudioMood(realDt);
+  if (running) updateBodySounds(dt);
   updateMicMeter(realDt);
   if (bannerTimer > 0) {
     bannerTimer -= dt;
@@ -3379,6 +3559,43 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+// 音の聞こえる向き：あなたの見ている方向から見て、右なら +、左なら −
+function panFor(x, y) {
+  const me = humanRider();
+  if (!me || game.demo) return 0;
+  const facing = cam.mode === 'overview' ? -Math.PI / 2 : cam.yaw;
+  return Math.sin(angleDiff(facing, Math.atan2(y - me.y, x - me.x))) * 0.9;
+}
+
+// 足音（自分の騎馬は大きく、近くの騎馬は向きと距離に合わせて）と、敵が近いときの心臓の音
+let heartT = 0;
+function updateBodySounds(dt) {
+  if (game.demo || game.state !== 'playing') return;
+  const me = humanRider();
+  if (!me) return;
+  for (const r of game.riders) {
+    if (!r.alive) continue;
+    const d = r === me ? 0 : dist(me, r);
+    if (d > 260) continue;
+    const ph = Math.floor(r.step * 1.6 / (r === me ? Math.PI : TAU));
+    const prev = stepPhase.get(r.id);
+    stepPhase.set(r.id, ph);
+    const sp = Math.hypot(r.vx, r.vy);
+    if (prev === undefined || ph === prev || sp < 30) continue;
+    const v = (r === me ? 0.9 : 0.6 / (1 + d / 110)) * Math.min(1.3, sp / 150) * (r.dashing ? 1.3 : 1);
+    Sound.step(v, r === me ? 0 : panFor(r.x, r.y));
+  }
+  if (!me.alive) return;
+  const e = nearestEnemy(me.team, me.x, me.y, 150);
+  if (!e) { heartT = 0; return; }
+  heartT -= dt;
+  if (heartT <= 0) {
+    const d = dist(me, e);
+    heartT = 0.42 + (d - 52) / 100 * 0.45;   // 近いほど速く
+    Sound.heartbeat(clamp(1.3 - d / 150, 0.3, 1));
+  }
+}
+
 // 盛り上がり（近くの敵の数・最近の討ち取り・残り時間）で、歓声と太鼓の強さを変える
 function updateAudioMood(dt) {
   if (game.demo || !(game.state === 'playing' || game.state === 'countdown' || game.state === 'ending')) return;
@@ -3387,7 +3604,7 @@ function updateAudioMood(dt) {
   let near = 0;
   if (me && me.alive) for (const e of game.riders) if (e.alive && e.team !== me.team && dist(me, e) < 220) near++;
   const ex = clamp(0.15 + near * 0.12 + game.hype + (game.time < 30 ? 0.3 : 0), 0, 1);
-  Sound.setCrowd(game.state === 'countdown' ? 0.03 : 0.02 + ex * 0.08);
+  Sound.setCrowd(game.state === 'countdown' ? 0.06 : 0.05 + ex * 0.17);
   Sound.bgm.intense = ex;
   Sound.tickBgm();
 }
@@ -3420,7 +3637,7 @@ openTitle();
 requestAnimationFrame(frame);
 
 // デバッグ用（ブラウザの開発者ツールから試せる）
-window.kibasen = { game, update, STEP, newMatch, startMatch, parseCommand, planCommand, runParsed, humanRider, grabChance, canGrab, capture, teamBrain, voice, setMic, camera, cam, drawFrame, updateHud, toggleCamera, quickCommand, switchLock, Talk, Sound, pad, mic, showMicHelp, updateMicMeter };
+window.kibasen = { game, update, STEP, newMatch, startMatch, parseCommand, planCommand, runParsed, humanRider, grabChance, canGrab, capture, teamBrain, voice, setMic, camera, cam, drawFrame, updateHud, toggleCamera, quickCommand, switchLock, Talk, Sound, pad, mic, showMicHelp, updateMicMeter, updateBodySounds, panFor };
 </script>
 </body>
 </html>
