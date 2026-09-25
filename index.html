@@ -149,6 +149,16 @@
   #moraleBadge[hidden] { display: none; }
   #moraleBadge .bar { width: 90px; height: 7px; border-radius: 99px; background: rgba(255,255,255,.15); overflow: hidden; }
   #moraleBadge .bar i { display: block; height: 100%; background: linear-gradient(90deg, #ff7a18, #ffd54a); }
+  .meter-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 11px; font-weight: 800; color: var(--muted); }
+  .meter-row[hidden] { display: none; }
+  .meter { flex: 1; height: 8px; border-radius: 99px; background: var(--panel-2); overflow: hidden; }
+  .meter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #34d399, #a3e635 70%, #facc15); border-radius: 99px; transition: width .06s linear; }
+  .vdevice { margin-top: 4px; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mini-meter { width: 44px; height: 6px; border-radius: 99px; background: rgba(255,255,255,.18); overflow: hidden; }
+  .mini-meter i { display: block; height: 100%; width: 0; background: #34d399; }
+  .steps { margin: 0 0 14px; padding-left: 22px; line-height: 1.8; font-size: 15px; }
+  .steps li { margin-bottom: 4px; }
+  .mh-note { font-size: 12.5px; color: var(--muted); line-height: 1.7; margin: 0 0 16px; padding: 10px 12px; background: var(--panel-2); border-radius: 10px; }
   .talk-toggle { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; color: #d6dbe4; cursor: pointer; }
   .talk-toggle input { accent-color: var(--gold); width: 16px; height: 16px; }
   .hint {
@@ -343,7 +353,7 @@
       <div id="flash"></div>
       <div id="orderBanner"><span class="ob-k">作戦</span><span id="obText"></span></div>
       <div id="moraleBadge" hidden>気合い<div class="bar"><i id="moraleFill"></i></div></div>
-      <div id="micBadge" hidden><span class="rec-dot"></span><span id="micBadgeText">音声指示 ON</span></div>
+      <div id="micBadge" hidden><span class="rec-dot"></span><span id="micBadgeText">音声指示 ON</span><span class="mini-meter"><i id="micBadgeLevel"></i></span></div>
       <div id="banner"></div>
       <div id="subtitle"><span class="h" id="subHeard"></span><span class="r" id="subResult"></span></div>
       <div id="hudBottom">
@@ -359,7 +369,9 @@
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
           <span id="micLabel">マイクをONにする（V）</span>
         </button>
-        <div class="vstatus" id="voiceStatus">マイクをONにすると、声で味方に指示できます</div>
+        <div class="meter-row" id="meterRow" hidden><span>マイクの音量</span><div class="meter"><i id="micLevel"></i></div></div>
+        <div class="vdevice" id="micDevice"></div>
+        <div class="vstatus" id="voiceStatus">マイクをONにすると、声で味方に指示できます（タイトル画面で話すと、聞き取れるか試せます）</div>
         <div class="vline"><span class="lbl">聞き取った言葉</span><span id="heardText" class="muted">—</span></div>
         <div class="vline"><span class="lbl">味方への指示</span><span id="interpText" class="muted">—</span></div>
         <form id="cmdForm" autocomplete="off">
@@ -451,6 +463,19 @@
 <!-- 結果画面 -->
 <div class="overlay" id="resultScreen" hidden>
   <div class="card" id="resultCard"></div>
+</div>
+
+<!-- マイクが使えないときの直し方 -->
+<div class="overlay" id="micHelp" hidden>
+  <div class="card">
+    <div class="kicker">マイクの設定</div>
+    <h2 class="res-title" id="mhTitle" style="font-size:28px;line-height:1.35"></h2>
+    <p class="res-sub" id="mhLead"></p>
+    <ol class="steps" id="mhSteps"></ol>
+    <p class="mh-note">マイクが使えなくても、右の入力欄に文字で打つか、キー（Z 全員突撃／X 全員集合／T 近くの敵を集中／F おまかせ／R 気合い）で指示できます。</p>
+    <button class="primary" id="mhRetry">もう一度マイクを試す</button>
+    <button class="secondary" id="mhClose">閉じる（Esc）</button>
+  </div>
 </div>
 
 <!-- 一時停止 -->
@@ -683,9 +708,14 @@ const Sound = {
   },
   setCrowd(level) { if (this.crowd) this.crowd.gain.setTargetAtTime(level, this.ctx.currentTime, 0.5); },
   duck(on) {
-    if (!this.music || this.ducked === on) return;
+    if (this.ducked === on) return;
     this.ducked = on;
-    this.music.gain.setTargetAtTime(on ? 0.3 : 1, this.ctx.currentTime, 0.08);
+    this.refreshMusic();
+  },
+  refreshMusic() {
+    if (!this.music) return;
+    const target = this.ducked ? 0.2 : voice.on ? 0.5 : 1;
+    this.music.gain.setTargetAtTime(target, this.ctx.currentTime, 0.08);
   },
 
   // 太鼓のBGM（少し先まで予約して鳴らす）
@@ -1531,7 +1561,7 @@ const INTENTS = [
   ['gather', /集ま|あつま|集合|しゅうごう|戻れ|もどれ|戻って|もどって|下が|さが|退却|撤退|引け|ひけ|来い|来て|こっち/],
   ['hold',   /止ま|とま|待て|まて|待機|たいき|ストップ|動くな|うごくな|その場/],
   ['guard',  /守|まも|護衛|ごえい|ガード|援護|えんご|助け|たすけ|かば/],
-  ['attack', /狙|ねら|突撃|とつげき|突っ込|つっこ|攻|せめ|こうげき|取れ|とれ|取って|とって|討|倒|たおせ|追え|おえ|行け|いけ|進め|すすめ|かかれ|アタック|やっつけ/],
+  ['attack', /狙|ねら|突撃|とつげき|突っ込|つっこ|攻|せめ|こうげき|取れ|とれ|取って|とって|討|倒|たおせ|追え|おえ|行け|いけ|行って|向か|むか|進め|すすめ|かかれ|アタック|やっつけ/],
 ];
 
 function normalizeCommand(raw) {
@@ -1776,7 +1806,7 @@ function rally() {
 // 指示を実行する（成功したら true）
 function runParsed(p) {
   if (game.demo || !(game.state === 'playing' || game.state === 'countdown')) {
-    showInterp('試合が始まったら指示できます', 'err');
+    showInterp(p.ok ? '聞き取れています！ 試合が始まったら、この指示が使えます' : '聞き取れています！ 試合中は「2番、黄色の3番を狙え」のように話してください', 'ok');
     return false;
   }
   if (!p.ok) {
@@ -1813,35 +1843,124 @@ const voice = {
   rec: null, on: false, running: false, session: 0, done: new Map(), restartT: 0, errors: 0,
   ignoreUntil: 0, lastTts: '',   // 仲間の読み上げをマイクが拾ったときに無視するため
 };
-const VOICE_ERRORS = {
-  'not-allowed': 'マイクの使用が許可されていません。アドレスバー左のアイコンからマイクを「許可」にして、もう一度 V を押してください',
-  'service-not-allowed': 'このブラウザでは音声認識が使えない設定です。Chrome か Edge で開いてください',
-  'audio-capture': 'マイクが見つかりません。マイクがつながっているか確認してください',
-  'network': '音声認識サーバーにつながりません。インターネット接続を確認してください（Chrome・Edge推奨）',
-  'language-not-supported': 'このブラウザは日本語の音声認識に対応していません',
+// ---------- マイクの状態の確認（許可・音量メーター・使っているマイク） ----------
+const mic = { stream: null, analyser: null, buf: null, level: 0, label: '', useTrack: true, loudMs: 0, quietMs: 0, lastResultAt: 0, restarts: 0, warnedQuiet: false };
+
+// 原因ごとの説明と直し方
+const MIC_HELP = {
+  'denied-site': {
+    title: 'このページでマイクがブロックされています',
+    lead: 'Chrome がこのページにマイクを使わせていません。',
+    steps: ['アドレスバーの左端にあるアイコン（鍵やつまみのマーク）をクリック', '「マイク」を「許可」に切り替える', 'ページを再読み込みして、もう一度 V キーを押す'],
+  },
+  'denied-os': {
+    title: 'Mac の設定で Chrome のマイクがオフになっています',
+    lead: 'Mac 本体の設定で、Chrome がマイクを使えない状態です。',
+    steps: ['画面左上のアップルメニュー →「システム設定」を開く', '「プライバシーとセキュリティ」→「マイク」を開く', '「Google Chrome」をオンにして、Chrome を再起動する'],
+  },
+  'no-device': {
+    title: 'マイクが見つかりません',
+    lead: '使えるマイクが見つかりませんでした。',
+    steps: ['マイクやヘッドセットをつなぐ', 'Mac の「システム設定」→「サウンド」→「入力」で使うマイクを選ぶ', 'もう一度 V キーを押す'],
+  },
+  'busy': {
+    title: 'マイクを使えません',
+    lead: 'ほかのアプリがマイクを使っている可能性があります。',
+    steps: ['Zoom・Teams・Discord など、マイクを使うアプリを閉じる', 'このゲームを開いたほかのタブも閉じる', 'もう一度 V キーを押す'],
+  },
+  'network': {
+    title: '音声認識サーバーにつながりません',
+    lead: 'Chrome の音声認識は、声を Google のサーバーで文字にしています。そこにつながりませんでした。',
+    steps: ['インターネットにつながっているか確認する', '会社・学校のネットワークや VPN では使えないことがあります（スマホのテザリングで試す）', 'Chrome を最新版にして再起動する'],
+  },
+  'no-result': {
+    title: '声は届いていますが、文字になりません',
+    lead: 'マイクには声が入っていますが、音声認識から結果が返ってきません。',
+    steps: ['インターネット接続を確認する（会社・学校のネットワークや VPN では使えないことがあります）', 'このゲームや音声入力を使っているほかのタブを閉じる', 'Chrome の設定（chrome://settings/content/microphone）で、使うマイクが正しいか確認する', 'Chrome を再起動する'],
+  },
+  'service': {
+    title: 'このブラウザでは音声認識が使えない設定です',
+    lead: '音声認識の機能がオフになっています（会社の管理設定などの可能性があります）。',
+    steps: ['個人の Chrome か Edge で開く'],
+  },
+  'unsupported': {
+    title: 'このブラウザは音声認識に対応していません',
+    lead: 'Firefox などは音声認識に対応していません。',
+    steps: ['Google Chrome か Microsoft Edge で開く'],
+  },
 };
 
-function setMic(on) {
-  if (!voice.SR) {
-    setVoiceStatus('このブラウザは音声認識に対応していません。Chrome か Edge で開いてください（文字入力やキーでも指示できます）', 'err');
+function micErrorKind(e) {
+  if (e.name === 'NotAllowedError' || e.name === 'SecurityError') return /system/i.test(e.message || '') ? 'denied-os' : 'denied-site';
+  if (e.name === 'NotFoundError' || e.name === 'OverconstrainedError') return 'no-device';
+  return 'busy';
+}
+
+// マイクの許可をとり、音量メーター用の音をもらう
+// （エコーキャンセルで、ゲーム自身の太鼓や仲間の声をなるべく差し引いた音になる）
+async function openMicStream() {
+  if (mic.stream) return { ok: true };
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return { ok: true };
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    mic.stream = stream;
+    const track = stream.getAudioTracks()[0];
+    mic.label = track ? track.label : '';
+    if (Sound.ctx) {
+      mic.analyser = Sound.ctx.createAnalyser();
+      mic.analyser.fftSize = 1024;
+      mic.buf = new Float32Array(mic.analyser.fftSize);
+      Sound.ctx.createMediaStreamSource(stream).connect(mic.analyser);
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, kind: micErrorKind(e) };
+  }
+}
+function closeMicStream() {
+  if (mic.stream) mic.stream.getTracks().forEach(t => t.stop());
+  Object.assign(mic, { stream: null, analyser: null, level: 0, label: '' });
+}
+
+async function setMic(on) {
+  if (!voice.SR) { showMicHelp('unsupported'); return; }
+  clearTimeout(voice.restartT);
+  if (!on) {
+    voice.on = false;
+    try { voice.rec && voice.rec.abort(); } catch (e) { /* 停止済み */ }
+    closeMicStream();
+    setVoiceStatus('マイク OFF', '');
+    updateMicUi();
+    Sound.refreshMusic();
     return;
   }
-  voice.on = on;
-  clearTimeout(voice.restartT);
-  if (on) {
-    voice.errors = 0;
-    setVoiceStatus('マイクを準備しています…（許可を求められたら「許可」を押してください）', '');
-    startRecognition();
-  } else {
-    try { voice.rec && voice.rec.abort(); } catch (e) { /* 停止済み */ }
-    setVoiceStatus('マイク OFF', '');
-  }
+  Object.assign(voice, { on: true, errors: 0 });
+  Object.assign(mic, { useTrack: true, loudMs: 0, quietMs: 0, restarts: 0, warnedQuiet: false, lastResultAt: performance.now() });
+  Sound.init();
   updateMicUi();
+  setVoiceStatus('マイクの許可を確認しています…（ポップアップが出たら「許可」を押してください）', '');
+  const res = await openMicStream();
+  if (!voice.on) { closeMicStream(); return; }
+  if (!res.ok) {
+    voice.on = false;
+    updateMicUi();
+    setVoiceStatus(MIC_HELP[res.kind].title, 'err');
+    showMicHelp(res.kind);
+    return;
+  }
+  startRecognition();
+  Sound.refreshMusic();
 }
 
 function startRecognition() {
   if (!voice.rec) voice.rec = createRecognizer();
-  try { voice.rec.start(); } catch (e) { /* すでに開始している */ }
+  // 新しい Chrome はマイクの音（エコーキャンセル済み）を直接渡せる。対応していなければ無視される
+  const track = mic.useTrack && mic.stream && mic.stream.getAudioTracks()[0];
+  try { track ? voice.rec.start(track) : voice.rec.start(); } catch (e) { /* すでに開始している */ }
+}
+// 音声認識をやり直す（onend で自動的に聞き直す）
+function restartRecognition() {
+  try { voice.rec && voice.rec.abort(); } catch (e) { /* 停止済み */ }
 }
 
 function createRecognizer() {
@@ -1853,13 +1972,14 @@ function createRecognizer() {
   rec.onstart = () => {
     voice.running = true;
     voice.session++;
-    setVoiceStatus('聞いています。話しかけてください', 'on');
+    setVoiceStatus(game.demo ? '聞いています。話しかけて、聞き取れるか試せます' : '聞いています。話しかけてください', 'on');
     updateMicUi();
   };
-  rec.onspeechstart = () => Sound.duck(true);    // 話している間は太鼓と歓声を小さく
+  rec.onspeechstart = () => Sound.duck(true);    // 話している間は太鼓と歓声をさらに小さく
   rec.onspeechend = () => Sound.duck(false);
   rec.onresult = e => {
     voice.errors = 0;
+    Object.assign(mic, { lastResultAt: performance.now(), loudMs: 0, restarts: 0 });
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const res = e.results[i], alts = [];
       for (let j = 0; j < res.length; j++) alts.push(res[j].transcript);
@@ -1869,9 +1989,18 @@ function createRecognizer() {
   rec.onerror = e => {
     if (e.error === 'no-speech' || e.error === 'aborted') return;
     voice.errors++;
-    if (['not-allowed', 'service-not-allowed', 'audio-capture', 'language-not-supported'].includes(e.error) || voice.errors >= 6) voice.on = false;
-    setVoiceStatus(VOICE_ERRORS[e.error] || `音声認識でエラーが起きました（${e.error}）`, 'err');
-    updateMicUi();
+    const kind = { 'not-allowed': 'denied-site', 'audio-capture': 'no-device', 'service-not-allowed': 'service', 'language-not-supported': 'unsupported' }[e.error];
+    if (kind || voice.errors >= 3) {
+      const k = kind || 'network';
+      voice.on = false;
+      closeMicStream();
+      updateMicUi();
+      Sound.refreshMusic();
+      setVoiceStatus(MIC_HELP[k].title, 'err');
+      showMicHelp(k);
+    } else {
+      setVoiceStatus(`音声認識の接続をやり直しています…（${e.error}）`, 'err');
+    }
   };
   rec.onend = () => {
     voice.running = false;
@@ -1881,6 +2010,42 @@ function createRecognizer() {
     updateMicUi();
   };
   return rec;
+}
+
+// 音量メーターと、うまく聞き取れていないときの自動診断（毎フレーム）
+function updateMicMeter(dt) {
+  const fill = $('#micLevel');
+  if (!voice.on || !mic.analyser) { fill.style.width = '0%'; return; }
+  mic.analyser.getFloatTimeDomainData(mic.buf);
+  let sum = 0;
+  for (let i = 0; i < mic.buf.length; i++) sum += mic.buf[i] * mic.buf[i];
+  const rms = Math.sqrt(sum / mic.buf.length);
+  mic.level = Math.max(rms, mic.level * 0.9);
+  fill.style.width = `${clamp(mic.level * 700, 0, 100)}%`;
+  $('#micBadgeLevel').style.width = fill.style.width;
+  if (!voice.running) return;
+  const now = performance.now();
+  // 声は入っているのに、文字になって返ってこない → やり直す。2回だめなら直し方を表示
+  if (rms > 0.035 && now > voice.ignoreUntil) mic.loudMs += dt * 1000;
+  if (mic.loudMs > 3000 && now - mic.lastResultAt > 7000) {
+    mic.loudMs = 0;
+    mic.restarts++;
+    if (mic.restarts >= 3) {
+      mic.restarts = 0;
+      showMicHelp('no-result');
+    } else {
+      mic.useTrack = !mic.useTrack;   // マイクの音の渡し方を変えて試す
+      setVoiceStatus('声が文字にならないので、音声認識をやり直しています…', 'err');
+      restartRecognition();
+    }
+  }
+  // ずっと無音 → マイクの選択が違うかも
+  mic.quietMs = rms < 0.003 ? mic.quietMs + dt * 1000 : 0;
+  if (mic.quietMs > 12000 && !mic.warnedQuiet) {
+    mic.warnedQuiet = true;
+    setVoiceStatus(`マイクに音が入っていません。使っているマイク：${mic.label || '不明'}（Mac の「システム設定」→「サウンド」→「入力」で確認）`, 'err');
+  }
+  if (mic.quietMs === 0) mic.warnedQuiet = false;
 }
 
 function onSpeech(key, alts, isFinal) {
@@ -2843,6 +3008,32 @@ function flash() {
   void flashEl.offsetWidth;
   flashEl.classList.add('go');
 }
+// マイクが使えないときの直し方を、画面の真ん中に出す（試合中なら一時停止）
+const micHelpEl = $('#micHelp');
+function showMicHelp(kind) {
+  const h = MIC_HELP[kind] || MIC_HELP.network;
+  $('#mhTitle').textContent = h.title;
+  $('#mhLead').textContent = h.lead;
+  $('#mhSteps').innerHTML = h.steps.map(x => `<li>${escapeHtml(x)}</li>`).join('');
+  if (!game.demo && (game.state === 'playing' || game.state === 'countdown')) {
+    game.prevState = game.state;
+    game.state = 'paused';
+    game.pausedByHelp = true;
+    Sound.stopBgm();
+    Sound.setCrowd(0);
+  }
+  micHelpEl.hidden = false;
+}
+function closeMicHelp() {
+  micHelpEl.hidden = true;
+  if (game.pausedByHelp) {
+    game.pausedByHelp = false;
+    game.state = game.prevState;
+    keys.clear();
+    if (game.state === 'playing') Sound.startBgm();
+  }
+}
+
 // 画面上部の「作戦」告知
 function showOrderBanner(html) {
   $('#obText').innerHTML = html;
@@ -2871,6 +3062,8 @@ function setVoiceStatus(text, cls) {
 function updateMicUi() {
   const btn = $('#micBtn');
   btn.classList.toggle('on', voice.on);
+  $('#meterRow').hidden = !(voice.on && mic.analyser);
+  $('#micDevice').textContent = voice.on && mic.label ? `使っているマイク：${mic.label}` : '';
   $('#micLabel').textContent = voice.on ? (voice.running ? '聞いています（V で停止）' : '準備中…（V で停止）') : 'マイクをONにする（V）';
   $('#micBadge').hidden = !voice.on;
   $('#micBadge .rec-dot').classList.toggle('idle', !voice.running);
@@ -3082,6 +3275,10 @@ function toggleMute() {
 // ============================================================
 const inMatch = () => !game.demo && (game.state === 'playing' || game.state === 'countdown');
 window.addEventListener('keydown', e => {
+  if (!micHelpEl.hidden) {                             // 直し方の画面を開いているとき
+    if (e.code === 'Escape') closeMicHelp();
+    return;
+  }
   if (e.target instanceof HTMLInputElement) {          // 指示の入力欄で文字を打っているとき
     if (e.code === 'Escape') e.target.blur();
     return;
@@ -3124,6 +3321,8 @@ $('#cmdForm').addEventListener('submit', e => {
   input.blur();
 });
 $('#micBtn').addEventListener('click', () => { setMic(!voice.on); $('#micBtn').blur(); });
+$('#mhRetry').addEventListener('click', () => { closeMicHelp(); setMic(true); });
+$('#mhClose').addEventListener('click', closeMicHelp);
 $('#talkToggle').addEventListener('change', e => { Talk.enabled = e.target.checked; if (!Talk.enabled) Talk.stop(); });
 if (!Talk.ok) { $('#talkToggle').checked = false; $('#talkToggle').disabled = true; }
 $('#camBtn').addEventListener('click', () => { toggleCamera(); $('#camBtn').blur(); });
@@ -3161,6 +3360,7 @@ function frame(now) {
     acc = 0;
   }
   updateAudioMood(realDt);
+  updateMicMeter(realDt);
   if (bannerTimer > 0) {
     bannerTimer -= dt;
     if (bannerTimer <= 0) bannerEl.classList.remove('show');
@@ -3210,12 +3410,17 @@ new ResizeObserver(resize).observe(wrap);
 await buildStage();
 updateCamUi();
 if (!voice.SR) setVoiceStatus('このブラウザは音声認識に対応していません。Chrome か Edge で開いてください（文字入力やキーでも指示できます）', 'err');
+else if (navigator.permissions && navigator.permissions.query) {
+  navigator.permissions.query({ name: 'microphone' }).then(st => {
+    if (st.state === 'denied') setVoiceStatus('このページではマイクがブロックされています。アドレスバー左のアイコンからマイクを「許可」にしてください', 'err');
+  }).catch(() => { /* 確認できないブラウザ */ });
+}
 else if (location.protocol === 'file:') setVoiceStatus('マイクをONにすると声で指示できます。うまく動かないときは GitHub Pages など https のページで開いてください', '');
 openTitle();
 requestAnimationFrame(frame);
 
 // デバッグ用（ブラウザの開発者ツールから試せる）
-window.kibasen = { game, update, STEP, newMatch, startMatch, parseCommand, planCommand, runParsed, humanRider, grabChance, canGrab, capture, teamBrain, voice, setMic, camera, cam, drawFrame, updateHud, toggleCamera, quickCommand, switchLock, Talk, Sound, pad };
+window.kibasen = { game, update, STEP, newMatch, startMatch, parseCommand, planCommand, runParsed, humanRider, grabChance, canGrab, capture, teamBrain, voice, setMic, camera, cam, drawFrame, updateHud, toggleCamera, quickCommand, switchLock, Talk, Sound, pad, mic, showMicHelp, updateMicMeter };
 </script>
 </body>
 </html>
