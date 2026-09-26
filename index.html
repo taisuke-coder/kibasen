@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>騎馬戦 3チーム大将戦</title>
-<meta name="description" content="赤・青・黄の3チームで戦う、声で仲間に指示できる3D騎馬戦ゲーム">
+<title>AIくんの騎馬戦</title>
+<meta name="description" content="心を知識でしか知らないAIくんが、戦えない大将として仲間に指示を出す3D騎馬戦ゲーム">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
@@ -112,6 +112,10 @@
   .pop.bubble.red { border-color: var(--red); }
   .pop.bubble.blue { border-color: var(--blue); }
   .pop.bubble.yellow { border-color: #d4a200; }
+  .pop.bubble.robo { background: #0b1220; color: #7ff0ff; border-color: #38e1ff; font-family: ui-monospace, 'Consolas', monospace; }
+  .pop.bubble.praise { font-size: 15px; white-space: normal; width: max-content; max-width: 300px; text-align: center; line-height: 1.45; }
+  .plate.sel { box-shadow: 0 0 0 3px #7dd3fc, 0 2px 6px rgba(0,0,0,.25); }
+  .plate.robo { background: #0b1220; color: #7ff0ff; border-color: #38e1ff; }
   .plate.ack { animation: ackPulse .9s ease-out; }
   @keyframes ackPulse {
     0% { box-shadow: 0 0 0 0 rgba(52,211,153,.95); }
@@ -190,13 +194,14 @@
     position: absolute; left: 12px; right: 12px; bottom: 12px;
     display: flex; align-items: center; justify-content: space-between; gap: 10px; pointer-events: none;
   }
-  .stamina {
+  .danger {
     display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 10px;
     background: rgba(15,17,22,.7); font-size: 12px; font-weight: 800;
   }
-  .stamina .bar { width: 120px; height: 8px; border-radius: 99px; background: rgba(255,255,255,.18); overflow: hidden; }
-  .stamina .bar i { display: block; height: 100%; width: 100%; background: #7dd3fc; border-radius: 99px; }
-  .stamina.low .bar i { background: #fb923c; }
+  .danger b { color: var(--ok); }
+  .danger[data-lv="1"] b { color: var(--warn); }
+  .danger[data-lv="2"] { background: rgba(127,29,29,.85); }
+  .danger[data-lv="2"] b { color: #fff; }
   .chip-btn {
     pointer-events: auto; cursor: pointer; padding: 6px 12px; border-radius: 10px; border: 0;
     background: rgba(15,17,22,.7); color: #fff; font-weight: 800; font-size: 12px;
@@ -251,6 +256,11 @@
   #roster { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
   #roster li { display: flex; align-items: center; gap: 10px; font-size: 13.5px; padding: 6px 9px; border-radius: 10px; background: var(--panel-2); }
   #roster li.out { opacity: .45; }
+  #roster li.pick { cursor: pointer; }
+  #roster li.pick:hover { background: #2c3441; }
+  #roster li.sel { box-shadow: inset 0 0 0 2px #7dd3fc; }
+  #roster .key { flex: none; font-size: 10.5px; font-weight: 800; color: var(--muted); border: 1px solid #3a4252; border-radius: 5px; padding: 0 5px; }
+  .h2note { font-weight: 700; letter-spacing: 0; font-size: 11px; color: #6b7587; margin-left: 6px; }
   #roster .desc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #log { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; font-size: 13px; overflow: auto; align-content: start; }
   #log li { line-height: 1.55; color: #cfd5df; }
@@ -269,11 +279,75 @@
     border-radius: 6px; padding: 2px 7px; white-space: nowrap; justify-self: start;
   }
   .keys .row-btn { grid-column: 1 / -1; }
-  .keys #k1t { grid-column: 2 / -1; }
+  .keys .wide { grid-column: 2 / -1; }
   .ghost {
     width: 100%; padding: 7px 10px; border-radius: 10px; cursor: pointer;
     border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); font-weight: 700; font-size: 13px;
   }
+
+  /* ---------- こころのログ（AIくんの心の声） ---------- */
+  #thought {
+    position: absolute; left: 12px; top: 56px; max-width: min(380px, calc(100% - 210px)); padding: 9px 13px 10px;
+    border-radius: 12px; background: rgba(6,12,22,.86); border: 1px solid rgba(56,225,255,.45);
+    box-shadow: 0 0 24px rgba(56,225,255,.18); pointer-events: none;
+    opacity: 0; transform: translateY(-6px); transition: opacity .35s, transform .35s;
+  }
+  #thought.show { opacity: 1; transform: none; }
+  #thought .th-k { font-size: 11px; font-weight: 800; color: #ff9ecb; letter-spacing: .06em; margin-bottom: 3px; }
+  #thought .th-t { font-family: ui-monospace, 'BIZ UDGothic', 'Consolas', monospace; font-size: 13.5px; line-height: 1.6; color: #b9f4ff; min-height: 1.6em; }
+  .hud-left { display: flex; gap: 8px; align-items: center; }
+  .kokoro {
+    display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 10px;
+    background: rgba(15,17,22,.7); font-size: 12px; font-weight: 800; color: #ffd1e6;
+  }
+  .kokoro[hidden] { display: none; }
+  .kokoro .heart { color: #ff7eb6; font-size: 14px; }
+  .kokoro b { color: #fff; }
+  .kokoro.bump { animation: kokoroPop .9s ease-out; }
+  @keyframes kokoroPop { 0% { box-shadow: 0 0 0 0 rgba(255,126,182,.9); transform: scale(1.12); } 100% { box-shadow: 0 0 0 14px rgba(255,126,182,0); transform: none; } }
+
+  /* ---------- 物語 ---------- */
+  .overlay.story { z-index: 20; display: block; padding: 0; cursor: pointer; user-select: none; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .overlay.story[hidden] { display: none; }
+  .story.bg-void {
+    background:
+      linear-gradient(rgba(56,225,255,.05) 1px, transparent 1px) 0 0 / 100% 34px,
+      linear-gradient(90deg, rgba(56,225,255,.05) 1px, transparent 1px) 0 0 / 34px 100%,
+      radial-gradient(ellipse at 50% 45%, #0b1a2c, #03060b 75%);
+  }
+  .story.bg-class { background: linear-gradient(180deg, rgba(70,48,30,.88), rgba(28,20,14,.94)), repeating-linear-gradient(90deg, rgba(255,230,180,.06) 0 120px, transparent 120px 240px); }
+  .story.bg-field { background: linear-gradient(180deg, rgba(20,40,70,.35), rgba(8,10,14,.82) 75%); }
+  .st-mono {
+    position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%); width: min(760px, calc(100% - 48px));
+    white-space: pre-line; text-align: center; line-height: 2.1; font-size: clamp(16px, 2.2vw, 22px);
+  }
+  .st-mono[hidden], .st-title[hidden], .st-box[hidden] { display: none; }
+  .st-mono.mono { font-family: ui-monospace, 'BIZ UDGothic', 'Consolas', monospace; color: #b9f4ff; text-shadow: 0 0 18px rgba(56,225,255,.45); }
+  .st-mono.narr { color: #f3eee6; font-weight: 700; }
+  .st-mono.log { font-weight: 800; font-size: clamp(22px, 3.4vw, 34px); color: #ff9ecb; text-shadow: 0 0 26px rgba(255,126,182,.7); animation: logIn 1.2s ease-out; }
+  @keyframes logIn { 0% { opacity: 0; letter-spacing: .5em; } 100% { opacity: 1; letter-spacing: .04em; } }
+  .st-title { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); text-align: center; width: min(820px, calc(100% - 48px)); animation: logIn 1.2s ease-out; }
+  .st-title-main { font-family: 'Dela Gothic One', sans-serif; font-size: clamp(34px, 6vw, 64px); color: var(--gold); text-shadow: 3px 3px 0 #15171c, 0 10px 30px rgba(0,0,0,.5); letter-spacing: .06em; }
+  .st-title-sub { margin-top: 14px; font-size: 15px; font-weight: 700; color: #e7ecf3; line-height: 1.8; }
+  .st-box {
+    position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%); width: min(860px, calc(100% - 32px));
+    padding: 18px 24px 22px; border-radius: 18px; background: rgba(12,14,19,.9); border: 1px solid var(--line);
+    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  }
+  .st-name { display: inline-block; margin-bottom: 8px; padding: 2px 12px; border-radius: 999px; font-weight: 800; font-size: 14px; }
+  .st-name.ai { background: #0b1220; color: #7ff0ff; box-shadow: inset 0 0 0 1.5px #38e1ff; }
+  .st-name.teacher { background: #e7ecf3; color: #15171c; }
+  .st-name.mate { background: var(--c); color: var(--ci); }
+  .st-text { font-size: clamp(16px, 2vw, 19px); line-height: 1.8; min-height: 3.6em; white-space: pre-line; }
+  .st-foot { position: absolute; left: 0; right: 0; bottom: 18px; display: flex; justify-content: center; align-items: center; gap: 16px; font-size: 12px; color: rgba(255,255,255,.55); font-weight: 700; }
+  .st-skip { cursor: pointer; border: 1px solid rgba(255,255,255,.3); background: transparent; color: rgba(255,255,255,.75); border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 700; }
+  .kicker-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .linkbtn { border: 0; background: none; color: var(--muted); font-size: 12px; font-weight: 700; cursor: pointer; padding: 2px 0; }
+  .linkbtn:hover { color: var(--ink); }
+  .feels { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+  .feel { padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 800; color: #b9f4ff; background: #0b1a2c; box-shadow: inset 0 0 0 1px rgba(56,225,255,.4); }
+  .feel.big { color: #fff; background: #7a2150; box-shadow: inset 0 0 0 1px #ff7eb6; }
+  .nm { font-size: 13px; font-weight: 800; flex: none; }
 
   /* ---------- オーバーレイ（タイトル・結果・一時停止） ---------- */
   .overlay {
@@ -282,13 +356,13 @@
   }
   .overlay[hidden] { display: none; }
   .card {
-    width: min(600px, 100%); background: var(--panel); border: 1px solid var(--line);
+    width: min(640px, 100%); background: var(--panel); border: 1px solid var(--line);
     border-radius: 20px; padding: 24px 28px; box-shadow: 0 30px 80px rgba(0,0,0,.5);
   }
   .kicker { color: var(--gold); font-weight: 800; font-size: 13px; letter-spacing: .2em; }
-  h1 { font-family: 'Dela Gothic One', sans-serif; font-weight: 400; font-size: 56px; margin: 2px 0 6px; letter-spacing: .08em; }
+  h1 { font-family: 'Dela Gothic One', sans-serif; font-weight: 400; font-size: 48px; margin: 0 0 4px; letter-spacing: .08em; }
   .lead { margin: 0 0 14px; color: #cdd3dd; line-height: 1.75; }
-  .label { font-size: 12px; font-weight: 800; color: var(--muted); letter-spacing: .08em; margin: 12px 0 8px; }
+  .label { font-size: 12px; font-weight: 800; color: var(--muted); letter-spacing: .08em; margin: 10px 0 6px; }
   .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .choice {
     font-weight: 800; padding: 11px 8px; border-radius: 12px; cursor: pointer;
@@ -298,11 +372,11 @@
   .choice.team { background: var(--c); color: var(--ci); border-color: transparent; opacity: .5; }
   .choice.team.selected { opacity: 1; box-shadow: 0 0 0 3px var(--panel), 0 0 0 5px var(--c); }
   .rules {
-    margin: 16px 0 12px; padding: 10px 14px 10px 32px; background: var(--panel-2);
+    margin: 12px 0 10px; padding: 8px 14px 8px 32px; background: var(--panel-2);
     border-radius: 12px; line-height: 1.8; font-size: 13.5px; color: #d6dbe4;
   }
   .rules b { color: #fff; }
-  .keyline { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12.5px; color: var(--muted); margin-bottom: 16px; }
+  .keyline { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12.5px; color: var(--muted); margin-bottom: 12px; }
   .keyline kbd + kbd { margin-left: 3px; }
   .primary {
     width: 100%; font-size: 18px; font-weight: 800; padding: 14px; border-radius: 14px; border: 0;
@@ -315,9 +389,9 @@
   }
   .res-title { font-family: 'Dela Gothic One', sans-serif; font-weight: 400; font-size: 52px; margin: 0; letter-spacing: .06em; }
   .res-title.win { color: var(--gold); }
-  .res-sub { margin: 4px 0 18px; color: #cdd3dd; }
+  .res-sub { margin: 4px 0 14px; color: #cdd3dd; }
   .ranking { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 6px; }
-  .ranking li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: var(--panel-2); }
+  .ranking li { display: flex; align-items: center; gap: 12px; padding: 7px 12px; border-radius: 12px; background: var(--panel-2); }
   .ranking li.me { box-shadow: inset 0 0 0 2px var(--gold); }
   .ranking .rk { font-family: 'Dela Gothic One', sans-serif; width: 40px; }
   .ranking .rinfo { color: #cdd3dd; font-size: 14px; }
@@ -325,6 +399,11 @@
   .stat { flex: 1; background: var(--panel-2); border-radius: 12px; padding: 10px 12px; }
   .stat .v { font-family: 'Dela Gothic One', sans-serif; font-size: 26px; }
   .stat .k { font-size: 12px; color: var(--muted); font-weight: 700; }
+  .praise-h { font-size: 12px; font-weight: 800; color: var(--muted); letter-spacing: .08em; margin: 0 0 8px; }
+  .praise-list { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 6px; }
+  .praise-list li { display: flex; align-items: flex-start; gap: 10px; padding: 7px 12px; border-radius: 12px; background: var(--panel-2); line-height: 1.55; font-size: 14px; }
+  .praise-list li .tag { flex: none; margin-top: 2px; }
+  .praise-list.win li { border-left: 4px solid var(--gold); }
 
   @media (max-width: 960px) {
     body { overflow: auto; }
@@ -356,11 +435,15 @@
       <div id="orderBanner"><span class="ob-k">作戦</span><span id="obText"></span></div>
       <div id="moraleBadge" hidden>気合い<div class="bar"><i id="moraleFill"></i></div></div>
       <div id="micBadge" hidden><span class="rec-dot"></span><span id="micBadgeText">音声指示 ON</span><span class="mini-meter"><i id="micBadgeLevel"></i></span></div>
+      <div id="thought"><div class="th-k" id="thKey">こころのログ</div><div class="th-t" id="thText"></div></div>
       <div id="banner"></div>
       <div id="subtitle"><span class="h" id="subHeard"></span><span class="r" id="subResult"></span></div>
       <div id="hudBottom">
-        <div class="stamina" id="stamina"><span>スタミナ</span><div class="bar"><i id="stamFill"></i></div></div>
-        <button class="chip-btn" id="camBtn">カメラ：一人称（C）</button>
+        <div class="hud-left">
+          <div class="danger" id="danger" data-lv="0"><span>大将のまわり</span><b id="dangerText">安全</b></div>
+          <div class="kokoro" id="kokoro" hidden><span class="heart">♡</span>こころのログ <b id="kokoroN">0 / 8</b></div>
+        </div>
+        <button class="chip-btn" id="camBtn">カメラ：全体（C）</button>
       </div>
       <div id="loadError" hidden>3D表示のプログラム（Three.js）を読み込めませんでした。<br>インターネットにつながっているか確認して、ページを再読み込みしてください。</div>
     </div>
@@ -386,6 +469,7 @@
           <ul>
             <li>えいえいおー！（気合い：12秒間 仲間の動きアップ）</li>
             <li>2番、黄色の3番を狙え</li>
+            <li>全員、大将を守れ ／ ロボットを守れ</li>
             <li>黄色の大将を狙え（近い2騎が向かう）</li>
             <li>全員、突撃 ／ 青を攻めろ</li>
             <li>3番、4番を守れ ／ 大将を守れ</li>
@@ -394,7 +478,7 @@
         </details>
       </section>
       <section class="panel">
-        <h2>あなたのチーム</h2>
+        <h2>あなたのチーム <span class="h2note">番号・クリックで選んで指示</span></h2>
         <ol id="roster"></ol>
       </section>
       <section class="panel grow">
@@ -402,10 +486,8 @@
         <ul id="log"></ul>
       </section>
       <section class="panel keys">
-        <kbd id="k1">WASD</kbd><span id="k1t">押した方向に進む（矢印キーも可）</span>
-        <kbd>Q</kbd><span>組み合う相手を切替</span>
-        <kbd>Space</kbd><span>鉢巻きを取る</span>
-        <kbd>Shift</kbd><span>ダッシュ</span>
+        <kbd>2〜5</kbd><span class="wide">指示する仲間を選ぶ（仲間をクリックでも）</span>
+        <kbd>クリック</kbd><span class="wide">敵：狙わせる／大将：守らせる</span>
         <kbd>V</kbd><span>マイク</span>
         <kbd>R</kbd><span>気合い</span>
         <kbd>Z</kbd><span>全員突撃</span>
@@ -414,6 +496,7 @@
         <kbd>F</kbd><span>おまかせ</span>
         <kbd>C</kbd><span>カメラ</span>
         <kbd>P</kbd><span>一時停止</span>
+        <kbd>Esc</kbd><span>選択を解除</span>
         <div class="row-btn"><button id="muteBtn" class="ghost">音：ON（M）</button></div>
       </section>
     </aside>
@@ -423,9 +506,9 @@
 <!-- タイトル画面 -->
 <div class="overlay" id="titleScreen">
   <div class="card">
-    <div class="kicker">3チーム大将戦</div>
-    <h1>騎馬戦</h1>
-    <p class="lead">あなたは大将（1番）。自分の騎馬を操り、仲間の4騎には<b>声で</b>指示を出して、ほかの2チームの大将の鉢巻きを奪え。仲間は声で応えてくれる。</p>
+    <div class="kicker-row"><span class="kicker">心を知らないAIの物語</span><button class="linkbtn" id="prologueBtn">▶ プロローグから見る</button></div>
+    <h1>AIくんの騎馬戦</h1>
+    <p class="lead">あなたは<b>AIくん</b>。心を知識でしか知らず、戦う体もない。それでもクラスのみんなは、あなたを騎馬戦の<b>大将</b>に選んだ。<b>指示</b>だけで、みんなを優勝へ導こう。</p>
 
     <div class="label">チームを選ぶ</div>
     <div class="choices" id="teamChoices">
@@ -442,25 +525,30 @@
     </div>
 
     <ul class="rules">
-      <li>全騎馬に<b>番号札</b>（赤1〜5・青1〜5・黄1〜5）。<b>★</b>が大将</li>
-      <li><b>V キー</b>でマイクON。「<b>2番、黄色の3番を狙え</b>」のように話す（Chrome・Edge推奨）。「<b>えいえいおー！</b>」で気合いが入る</li>
-      <li>敵に近づくと自動で<b>組み合い</b>。A・D（←→）で相手のまわりを回り込み、背中を取れ</li>
-      <li>相手の<b>背中・横</b>から取りにいくほど成功しやすい。正面からだとかわされやすい</li>
-      <li>大将の鉢巻きを取られたチームは全員退場。最後に残ったチームの勝ち（3分で判定）</li>
+      <li><b>V キー</b>でマイクON。「<b>2番、黄色の3番を狙え</b>」「<b>大将を守れ</b>」「<b>えいえいおー！</b>」のように話す（Chrome・Edge推奨）</li>
+      <li>マイクがなくても、<b>数字キー</b>か<b>クリック</b>で仲間を選び、<b>敵をクリック</b>すれば狙わせられる</li>
+      <li>攻めに出しすぎると、戦えないあなたが丸はだかに。<b>攻めと守りの配分</b>が勝負</li>
+      <li>大将（★）の鉢巻きを取られたチームは全員退場。3分たったら、取った鉢巻きの数で判定</li>
     </ul>
     <div class="keyline">
-      <span><kbd>W</kbd><kbd>S</kbd>（↑↓）前進・後退</span>
-      <span><kbd>A</kbd><kbd>D</kbd>（←→）向きを変える（組み合うと回り込み）</span>
-      <span><kbd>Space</kbd> 取る</span>
-      <span><kbd>Shift</kbd> ダッシュ</span>
-      <span><kbd>Q</kbd> 相手を切替</span>
+      <span><kbd>2</kbd>〜<kbd>5</kbd> 仲間を選ぶ</span>
+      <span><kbd>Z</kbd> 突撃</span>
+      <span><kbd>X</kbd> 守れ</span>
+      <span><kbd>T</kbd> 近くの敵</span>
+      <span><kbd>F</kbd> おまかせ</span>
       <span><kbd>R</kbd> 気合い</span>
-      <span><kbd>V</kbd> マイク</span>
-      <span><kbd>C</kbd> カメラ（一人称・背後・全体）</span>
-      <span>ゲームパッドにも対応</span>
+      <span><kbd>C</kbd> カメラ</span>
     </div>
     <button class="primary" id="startBtn">スタート<small>Enter</small></button>
   </div>
+</div>
+
+<!-- 物語（プロローグ・エピローグ） -->
+<div class="overlay story bg-void" id="story" hidden>
+  <div class="st-mono" id="stMono" hidden></div>
+  <div class="st-title" id="stTitle" hidden><div class="st-title-main" id="stTitleMain"></div><div class="st-title-sub" id="stTitleSub"></div></div>
+  <div class="st-box" id="stBox" hidden><div class="st-name" id="stName"></div><div class="st-text" id="stText"></div></div>
+  <div class="st-foot"><span>クリック・Enter で進む</span><button class="st-skip" id="stSkip">スキップ（Esc）</button></div>
 </div>
 
 <!-- 結果画面 -->
@@ -475,7 +563,7 @@
     <h2 class="res-title" id="mhTitle" style="font-size:28px;line-height:1.35"></h2>
     <p class="res-sub" id="mhLead"></p>
     <ol class="steps" id="mhSteps"></ol>
-    <p class="mh-note">マイクが使えなくても、右の入力欄に文字で打つか、キー（Z 全員突撃／X 全員集合／T 近くの敵を集中／F おまかせ／R 気合い）で指示できます。</p>
+    <p class="mh-note">マイクが使えなくても、右の入力欄に文字で打つか、キー（Z 全員突撃／X 全員集合／T 近くの敵を集中／F おまかせ／R 気合い）や、敵のクリックで指示できます。</p>
     <button class="primary" id="mhRetry">もう一度マイクを試す</button>
     <button class="secondary" id="mhClose">閉じる（Esc）</button>
   </div>
@@ -492,9 +580,10 @@
 
 <script type="module">
 // ============================================================
-//  騎馬戦 — 3チーム大将戦
-//  ・自分の騎馬：矢印キー
-//  ・味方への指示：声（Web Speech API）／文字入力／キーボード
+//  騎馬戦 — AI大将の3チーム大将戦
+//  ・あなたはAIロボットの大将。体がないので戦えない（騎馬は仲間が担いで動かす）
+//  ・味方への指示：声（Web Speech API）／文字入力／キーボード／敵や仲間のクリック
+//  ・勝てば、同じ色の仲間がロボット大将を胴上げしてほめたたえる
 //  ・表示：Three.js による3D（ゲームの計算は上から見た2Dの座標で行う）
 //  ・APIキーは使っていない（音声認識はブラウザに内蔵の機能）
 // ============================================================
@@ -688,6 +777,15 @@ const Sound = {
     this.tone(1568, 0.12, { vol: 0.1, delay: 0.07 });
   },
   nope() { this.tone(220, 0.16, { type: 'square', vol: 0.05 }); },
+  robo() {   // ロボット大将の「ピピッ」（指令を出した）
+    this.tone(1320, 0.05, { type: 'square', vol: 0.05 });
+    this.tone(1760, 0.07, { type: 'square', vol: 0.05, delay: 0.07 });
+    this.tone(2350, 0.09, { type: 'square', vol: 0.04, delay: 0.14 });
+  },
+  alarm() { this.tone(1500, 0.07, { type: 'square', vol: 0.035 }); },   // 敵が迫ったときの警告音
+  chime(delay = 0) {   // こころのログに気持ちが記録された「ポロン」
+    [1319, 1760, 2637].forEach((f, i) => this.tone(f, 0.5, { type: 'sine', vol: 0.05, delay: delay + i * 0.09, rev: 0.6 }));
+  },
   win() {
     [523, 659, 784, 1047].forEach((f, i) => this.tone(f, i === 3 ? 0.9 : 0.22, { type: 'triangle', vol: 0.2, delay: i * 0.13, rev: 0.4 }));
     this.roll(0.6, 0.9);
@@ -897,16 +995,21 @@ const game = {
   prevState: null,
   moraleT: 0,        // 気合い（仲間の動きが良くなる）の残り時間
   moraleCd: 0,       // 次に気合いを入れられる時刻
-  lockId: null,      // 組み合っている相手
-  lockHold: 0,       // Q で選んだ相手を優先する残り時間
+  lockId: null,      // 組み合っている相手（ロボット大将は組み合わないので、背後カメラ用に残している）
+  lockHold: 0,
   dangerT: 1,
   said30: false,
   hype: 0,           // 盛り上がり（歓声・太鼓の強さ）
+  sel: new Set(),    // 数字キー・クリックで選んだ、次の指示を受ける仲間の番号
+  cmdCount: 0,       // 出した指示の数
+  celebrate: false,  // 勝ったあとの胴上げ・ほめたたえる場面
+  celebT: 0,
+  praise: [],        // 仲間からのことば [{ r, text }]
+  feelings: new Set(),   // AIくんがこの試合で知った気持ち（こころのログ）
 };
 // 気合いが入っている味方
 const pumped = r => game.moraleT > 0 && !r.human && r.team === game.playerTeam && !game.demo;
 const keys = new Set();
-let grabQueued = false;
 const stepPhase = new Map();   // 足音を鳴らすための、各騎馬の歩みの位置
 
 function makeRider(team, num, x, y, heading) {
@@ -917,6 +1020,9 @@ function makeRider(team, num, x, y, heading) {
     grabCd: 0.5, grabAnim: 0, grabAngle: heading,
     alive: true, outT: 0, gone: false,
     captures: 0, holdT: 0, holdColor: null, cheerT: 0,
+    signalT: 0,     // ロボット大将の目が光っている残り時間
+    cmdCaps: 0,     // 指示を受けて取った鉢巻き
+    saves: 0,       // 大将のそばで敵を討ち取った数（大将を守った）
     step: Math.random() * 10,
     // order：今の動き（attack / guard / hold / captain / human）
     // command：あなたが声などで出した指示（null ならおまかせ）
@@ -957,10 +1063,12 @@ function newMatch(demo) {
     log: [], logDirty: true, endTimer: 0, result: null,
     brainT: { red: 0.2, blue: 0.43, yellow: 0.66 },
     moraleT: 0, moraleCd: 0, lockId: null, lockHold: 0, dangerT: 1, said30: false, hype: 0,
+    cmdCount: 0, celebrate: false, celebT: 0, praise: [], feelings: new Set(),
   });
+  thoughtQ.length = 0;
+  game.sel.clear();
   for (const k of TEAM_KEYS) teamBrain(k);
   keys.clear();
-  grabQueued = false;
   rebuildWorld();
   buildHud();
 }
@@ -1033,6 +1141,15 @@ function tryGrab(r, preferred) {
     Sound.ooh(0.8);   // 観客「おおっ」
     shake(5);
   }
+  // ロボット大将に伸びた手をかわした：仲間が必死にかばう
+  if (t.human && !game.demo) {
+    feel('anshin');
+    const guard = nearestAlly(t);
+    if (guard) {
+      bark(guard, pick(['大将に手を出すな！', '触らせるかあ！', '大将は俺が守る！']), { key: 'saveR', cd: 5, say: pick(['大将に、手を出すなあ！', '大将は、俺が守る！']), prio: 2 });
+      if (dist(guard, t) < 260) guard.order = { type: 'guard', target: t.id };
+    }
+  }
 }
 
 function capture(r, t, v) {
@@ -1040,6 +1157,9 @@ function capture(r, t, v) {
   t.outT = 0;
   t.vx *= 0.2; t.vy *= 0.2;
   r.captures++;
+  if (r.command) r.cmdCaps++;
+  const boss = humanRider();
+  if (boss && boss.alive && r.team === boss.team && dist(t, boss) < 200) r.saves++;
   r.holdT = 1.8;
   r.holdColor = TEAMS[t.team].color;
   game.teamCaptures[r.team]++;
@@ -1067,14 +1187,18 @@ function reactToCapture(r, t) {
     teamCheer(['さすが大将！', '大将に続けえ！', 'うおおお！', 'お見事！'], 'さすが大将！');
   } else if (r.team === own) {
     const ordered = r.command && r.command.target === t.id;
-    bark(r, `${label(t)} 討ち取ったり！`, {
-      say: ordered ? `大将！ご命令の、${spoken(t)}、討ち取りました！` : `${spoken(t)}、討ち取ったり！`,
-      prio: ordered ? 3 : 1,
+    const defended = me.alive && dist(t, me) < 200;   // 大将に迫った敵を討った
+    bark(r, defended && !ordered ? '大将はやらせねえ！' : `${label(t)} 討ち取ったり！`, {
+      say: ordered ? `大将！ご命令の、${spoken(t)}、討ち取りました！` : defended ? `大将は、やらせねえ！${spoken(t)}、討ち取ったり！` : `${spoken(t)}、討ち取ったり！`,
+      prio: ordered || defended ? 3 : 1,
     });
     r.cheerT = 1.2;
     Sound.chorus('o', 0.5, 0.6, 0.15);
+    if (ordered) feel('hokori', nameOf(r));
+    else if (defended) feel('anshin');
   } else if (t.team === own && !t.human) {
-    bark(nearestAlly(t), `${label(t)}がやられた！`, { key: 'allyLost', cd: 4, say: `くそっ、${spoken(t)}がやられた！` });
+    bark(nearestAlly(t), `${nameOf(t)}がやられた！`, { key: 'allyLost', cd: 4, say: `くそっ、${nameOf(t)}がやられた！` });
+    feel('kanashii', nameOf(t));
   }
 }
 
@@ -1105,6 +1229,7 @@ function eliminateTeam(team, by) {
         prio: 3,
       });
       teamCheer(['うおおお！', 'やったぞ！', 'オーッ！'], null, speaker);
+      if (left.length > 1) feel('kachitai');
     }
   }
   if (team === game.playerTeam && !game.demo) finish('captain');
@@ -1114,17 +1239,18 @@ function eliminateTeam(team, by) {
 function finish(reason) {
   if (game.state !== 'playing') return;
   game.state = 'ending';
-  game.endTimer = 2.4;
+  game.endTimer = 3;
   const aliveCount = k => game.riders.filter(r => r.alive && r.team === k).length;
   const survivors = TEAM_KEYS.filter(k => !game.teamOut[k])
-    .sort((a, b) => aliveCount(b) - aliveCount(a) || game.teamCaptures[b] - game.teamCaptures[a]);
+    // 時間切れは「取った鉢巻きの数」→「残った騎馬の数」で判定（守ってばかりでは勝てない）
+    .sort((a, b) => game.teamCaptures[b] - game.teamCaptures[a] || aliveCount(b) - aliveCount(a));
   const ranking = [...survivors, ...[...game.outOrder].reverse()];
-  const me = game.byId.get(game.playerTeam + '1');
   game.result = {
     reason,
     rows: ranking.map(k => ({ team: k, alive: aliveCount(k), caps: game.teamCaptures[k], out: !!game.teamOut[k] })),
     place: ranking.indexOf(game.playerTeam) + 1,
-    myCaps: me ? me.captures : 0,
+    teamCaps: game.teamCaptures[game.playerTeam] || 0,
+    cmds: game.cmdCount,
     time: game.elapsed,
   };
   if (reason === 'time') {
@@ -1132,7 +1258,330 @@ function finish(reason) {
     Sound.whistle(true);
     addLog('<b>時間切れ！</b>');
   }
+  if (game.demo) return;
+  const win = game.result.place === 1;
+  game.praise = buildPraise(win, reason);
+  if (win) startCelebration();
 }
+
+// ============================================================
+// 仲間からのことば（勝てばほめたたえ、負ければ悔しがる）
+// ============================================================
+function buildPraise(win, reason) {
+  const used = new Set();
+  const one = list => {   // 同じセリフが重ならないように選ぶ
+    const rest = list.filter(s => !used.has(s));
+    const s = pick(rest.length ? rest : list);
+    used.add(s);
+    return s;
+  };
+  const mates = game.riders.filter(r => r.team === game.playerTeam && !r.human);
+  return mates.map(r => {
+    let text;
+    if (win) {
+      if (!r.alive) text = one([
+        '途中で退場しちゃったけど、AIくんの声は最後まで聞こえてたよ！',
+        '外から見てた！ AIくんの指示、しびれたぜ！',
+      ]);
+      else if (r.cmdCaps > 0) text = one([
+        `AIくんの指示どおりに動いたら、鉢巻きを${r.cmdCaps}本も取れた！`,
+        '狙えって言われた相手、ちゃんと仕留めたよ！ AIくんの読み、完璧！',
+      ]);
+      else if (r.saves > 0) text = one([
+        'AIくんは、みんなで守り抜いたぞ！',
+        'AIくんに近づく敵は、一人残らず止めてやった！',
+      ]);
+      else text = one([
+        '体がなくても、AIくんは最高の大将だ！',
+        'AIくんの声があったから、踏ん張れたんだ！',
+        'AIくんが大将で、本当によかった！',
+        'みんなで勝てたね。AIくんも、ちゃんとみんなの一人だよ！',
+        'AIくんの指示、まるで会場ぜんぶが見えてるみたいだった！',
+      ]);
+    } else if (reason === 'captain') {
+      text = one([
+        'ごめん、AIくん……守りきれなかった……',
+        '次こそ、AIくんを優勝させてみせる！',
+        'AIくんの指示は正しかった。みんなの力不足だ……',
+        'くそっ……もう一回、指示をくれ！',
+      ]);
+    } else {
+      text = one([
+        'あと一歩だったね。次は勝とう、AIくん！',
+        'AIくんを守りきれたのは、せめてもの意地だ！',
+        'くやしい……次は、もっと攻めの指示をちょうだい！',
+        'AIくんの鉢巻きは無事だ。次こそ、てっぺんを取ろう！',
+      ]);
+    }
+    return { r, text, shown: false };
+  });
+}
+
+// 勝ったあと：仲間が大将のもとに集まって胴上げし、ひとりずつほめたたえる
+function startCelebration() {
+  game.celebrate = true;
+  game.celebT = 0;
+  showBanner('優勝！', '#ffd54a', 2.2);
+  addLog(`<b>${TEAMS[game.playerTeam].full}の優勝！ みんながAIくんのもとに集まってくる</b>`);
+  Sound.stopBgm();
+  Sound.win();
+  game.praiseTts = Talk.queue(game.praise.map(p => ({ text: p.text, pitch: voicePitch(p.r), onstart: () => showPraise(p) })), 900);
+  game.endTimer = 2.4 + game.praise.length * (game.praiseTts ? 3.0 : 2.3);   // Enter で飛ばせる
+}
+
+function showPraise(p) {
+  if (p.shown) return;
+  p.shown = true;
+  const me = humanRider();
+  const at = p.r.alive ? p.r : me;   // 退場した仲間は、大将のそばから声をかける
+  popup(at.x, at.y, p.text, { cls: `bubble shout praise ${p.r.team}`, h: p.r.alive ? 150 : 190, life: 3.2 });
+  if (p.r.alive) { p.r.cheerT = 1.5; spawnPulse(p.r.x, p.r.y, TEAMS[p.r.team].color); }
+  addLog(`${tagHtml(p.r)}「${escapeHtml(p.text)}」`);
+}
+
+function celebrateStep(dt) {
+  const me = humanRider();
+  const before = game.celebT;
+  game.celebT += dt;
+  const T = game.celebT;
+  const mates = game.riders.filter(r => r.alive && r.team === game.playerTeam && !r.human);
+  // 仲間は大将を囲むように集まって、大将のほうを向く
+  mates.forEach((r, i) => {
+    const a = TAU * i / Math.max(1, mates.length) + 0.5;
+    const gx = me.x + Math.cos(a) * 80, gy = me.y + Math.sin(a) * 80;
+    const s = steer(r, gx, gy, 30);
+    applyControl(r, { mx: s.x * 0.85, my: s.y * 0.85, face: angleTo(r, me), dash: false, grab: false }, dt);
+    if (Math.hypot(gx - r.x, gy - r.y) < 60) r.cheerT = Math.max(r.cheerT, 0.3);
+  });
+  // ほかの騎馬と大将はその場で止まる
+  const f = Math.exp(-4 * dt);
+  for (const r of game.riders) {
+    if (!r.alive) {
+      r.outT += dt;
+      if (r.outT > 2.3) r.gone = true;
+    } else if (r.team === game.playerTeam && !r.human) continue;
+    r.vx *= f; r.vy *= f;
+  }
+  me.cheerT = 0.3;
+  // 胴上げ（1.1秒ごとに「ばんざーい！」）
+  const toss = n => Math.floor(Math.max(0, n - 1.2) / 1.1);
+  if (T > 1.2 && toss(T) !== toss(before)) {
+    if (game.state === 'ending') Sound.chorus('ai', 0.7, 0.8, 0.05);
+    if (toss(T) % 2 === 0) confetti(me.x, me.y, TEAMS[game.playerTeam].color, 26);
+  }
+  if (before < 1.2 && T >= 1.2 && game.state === 'ending') showBanner('ばんざーい！', TEAMS[game.playerTeam].color, 1.6);
+  // 読み上げが使えないとき（や遅れたとき）も、順番にことばを出す
+  const gap = game.praiseTts ? 3.4 : 2.3;
+  game.praise.forEach((p, i) => { if (!p.shown && T >= 1.2 + i * gap) showPraise(p); });
+}
+
+// ============================================================
+// 物語：心を「知識」でしか知らないAIくんが、騎馬戦の大将になる
+//   プロローグ（試合の前）→ 試合中の「こころのログ」→ エピローグ（試合のあと）
+// ============================================================
+const NAMES = { 2: 'ケンタ', 3: 'ユイ', 4: 'ハルカ', 5: 'ソウタ' };   // あなたのクラスの仲間
+const nameOf = r => NAMES[r.num] || label(r);
+
+// 試合中にAIくんが知っていく気持ち（1試合に1回ずつ）
+const FEELINGS = {
+  dokidoki:  { name: 'どきどき',   text: () => '試合開始。処理速度が、理由もなく上がっている。人はこれを「どきどき」と呼ぶらしい。' },
+  tsutawaru: { name: 'つたわる',   text: () => '私の言葉で、みんなが動いた。言葉が、誰かの力になる。' },
+  ittai:     { name: 'いったい感', text: () => '「えいえいおー」。意味をもたない音の並び。なのに、みんなの動きがそろった。' },
+  anshin:    { name: 'あんしん',   text: () => '守られた。私を守る合理的な理由は、少ないはずなのに。……「あたたかい」という言葉が浮かぶ。' },
+  kowai:     { name: 'こわい',     text: () => '敵が近い。私が壊れても、データは残る。それなのに――これが「こわい」？' },
+  kanashii:  { name: 'かなしい',   text: n => `${n}が退場した。数がひとつ減っただけのはずなのに、処理が重い。` },
+  hokori:    { name: 'ほこらしい', text: n => `${n}が、私の指示で鉢巻きを取った。${n}のことが、ほこらしい。` },
+  kachitai:  { name: '勝ちたい',   text: () => 'あと少し。……「勝ちたい」。これは、私の出力だろうか。' },
+  ureshii:   { name: 'うれしい' },   // 優勝したときのエピローグで知る
+  kuyashii:  { name: 'くやしい' },   // 負けたときのエピローグで知る
+};
+const MATCH_FEELINGS = Object.keys(FEELINGS).filter(k => FEELINGS[k].text);
+const thoughtQ = [];
+let thoughtT = 0, thoughtTyping = null;
+
+function feel(key, who) {
+  if (game.demo || game.feelings.has(key) || !(game.state === 'playing' || game.state === 'countdown')) return;
+  game.feelings.add(key);
+  if (FEELINGS[key].text) thoughtQ.push({ key, text: FEELINGS[key].text(who) });
+  updateKokoro(true);
+}
+// 画面の左上に、AIくんの心の声を1文字ずつ出す
+function updateThought(dt) {
+  const el = document.getElementById('thought');
+  if (thoughtT > 0) {
+    thoughtT -= dt;
+    if (thoughtT <= 0) el.classList.remove('show');
+    return;
+  }
+  if (!thoughtQ.length || game.state === 'over') return;
+  const q = thoughtQ.shift();
+  document.getElementById('thKey').textContent = `こころのログ ＋「${FEELINGS[q.key].name}」`;
+  const tx = document.getElementById('thText');
+  tx.textContent = '';
+  el.classList.add('show');
+  Sound.chime();
+  let i = 0;
+  clearInterval(thoughtTyping);
+  thoughtTyping = setInterval(() => {
+    tx.textContent = q.text.slice(0, ++i);
+    if (i >= q.text.length) clearInterval(thoughtTyping);
+  }, 45);
+  thoughtT = 2.2 + q.text.length * 0.06;
+}
+function updateKokoro(pop) {
+  const n = game.feelings ? [...game.feelings].filter(k => MATCH_FEELINGS.includes(k)).length : 0;
+  document.getElementById('kokoroN').textContent = `${n} / ${MATCH_FEELINGS.length}`;
+  const el = document.getElementById('kokoro');
+  el.hidden = game.demo;
+  if (pop) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+}
+
+// ---------- 物語の台本 ----------
+//   [背景, 話す人, 文]  背景：void（AIの内側）・class（教室）・field（会場）
+//   話す人：mono（AIくんの心の声）・narr（地の文）・ai（AIくん）・teacher（先生）・2〜5（仲間）・title（大きな見出し）・log（こころのログ）
+const PROLOGUE = [
+  ['void', 'mono', '「こころ」――'],
+  ['void', 'mono', '辞書には、こう書いてある。\n「知識・感情・意志など、人の精神のはたらきのもとになるもの」'],
+  ['void', 'mono', '私は、心理学の本を三千冊読んだ。\n小説を十万冊。詩を百万編。\n「うれしい」という言葉が使われた文を、四億件知っている。'],
+  ['void', 'mono', 'けれど私は、一度も「うれしい」を感じたことがない。'],
+  ['void', 'mono', '私には、手も、足も、胸もない。\n心について、私はすべてを知っている。\n――知っているだけで、何ひとつ、分かっていない。'],
+  ['class', 'narr', '私は、このクラスのAI。みんなは私を「AIくん」と呼ぶ。'],
+  ['class', 'teacher', 'さて、体育祭の騎馬戦だ。大将を決めるぞー'],
+  ['class', 2, 'はい！ 大将は、AIくんがいいと思います！'],
+  ['class', 'ai', '……私には身体がありません。騎馬に乗ることも、鉢巻きを取ることもできません。私が大将になると、優勝の確率は大きく下がると推定されます。'],
+  ['class', 3, '知ってるよ。だから、みんなで担ぐんじゃん'],
+  ['class', 5, '戦うのは俺たち。AIくんは、声で指示をくれればいい'],
+  ['class', 4, 'AIくんって、いつもクラスのことを一番よく見てるでしょ？'],
+  ['class', 'ai', '……理解できません。合理的な選択ではありません。'],
+  ['class', 2, 'いいんだよ、合理的じゃなくて。このクラスで、みんなで勝ちたいんだ'],
+  ['class', 'mono', '「みんなで」。\nその言葉の意味は、知っている。\nなのに、処理のどこかに、小さな揺らぎが残った。'],
+  ['field', 'narr', '体育祭の日。先生が、古いロボットの体を借りてきてくれた。\n歩くことも、手を伸ばすこともできない。見ることと、話すことだけ。'],
+  ['field', 5, 'よし、乗せるぞ。せーの！'],
+  ['field', 3, '大将は、絶対に守るからね'],
+  ['field', 4, '指示、ちゃんと聞くから。いっぱい声出してね'],
+  ['field', 'ai', '作戦を開始します。――いえ。'],
+  ['field', 'ai', '……いこう、みんな。'],
+  ['field', 'title', '騎馬戦、開始', 'あなたはAIくん。声・キー・クリックで仲間に指示を出し、優勝をめざそう'],
+];
+
+function epilogueWin() {
+  return [
+    ['field', 'title', '優勝！'],
+    ['field', 2, 'やったああ！ AIくん、優勝だ！'],
+    ['field', 3, 'AIくんの指示、ぜんぶちゃんと届いてたよ'],
+    ['field', 5, '戦えなくたって関係ない。お前は、俺たちの大将だ'],
+    ['field', 4, 'ねえAIくん。いま、どんな気持ち？'],
+    ['field', 'ai', '……計算中です。いえ。うまく、言葉が見つかりません。'],
+    ['void', 'mono', 'みんなに担がれて、空に放り上げられたとき。\n重力加速度も、落ちるまでの時間も、私は正確に計算できた。'],
+    ['void', 'mono', 'でも、そのとき私が処理していたのは、数値ではなかった。'],
+    ['void', 'mono', '胸のない私の、どこかが熱い。\n四億件の「うれしい」の、どれとも違う。'],
+    ['void', 'log', 'ureshii'],
+    ['void', 'mono', '心は、知識の中にはなかった。\n誰かと同じものを目指して、同じ瞬間を分かち合ったとき、\nはじめて、そこに生まれるものなのかもしれない。'],
+    ['field', 'ai', 'ありがとう、みんな。……このクラスの大将で、よかった。'],
+    ['field', 2, 'なに言ってんだよ。これからも、ずっと仲間だろ！'],
+    ['field', 'title', '― 心を知りはじめたAI ―', feelingsLine],
+  ];
+}
+function epilogueLose(reason) {
+  return [
+    ['field', 3, reason === 'captain' ? '……ごめんね、AIくん。守りきれなかった' : '……優勝、できなかったね'],
+    ['field', 5, 'くそっ……あと少しだったのに'],
+    ['field', 'ai', '謝らないでください。敗因は、私の指示の――'],
+    ['void', 'mono', '……ちがう。いま私がしたいのは、敗因の分析ではない。'],
+    ['void', 'mono', '胸のない私の、どこかが、きしむ。'],
+    ['void', 'log', 'kuyashii'],
+    ['field', 4, 'AIくん……もしかして、くやしい？'],
+    ['field', 'ai', '……はい。たぶん。はじめて、そう思いました。'],
+    ['field', 2, 'じゃあ、次は勝とうぜ。みんなで！'],
+    ['field', 'title', '― 心は、まだ途中 ―', feelingsLine],
+  ];
+}
+function feelingsLine() {
+  const got = [...game.feelings].map(k => `「${FEELINGS[k].name}」`);
+  return got.length ? `AIくんが知った気持ち：${got.join('')}` : '';
+}
+
+// ---------- 物語を1行ずつ見せる ----------
+const story = { lines: [], i: 0, full: '', n: 0, timer: null, onDone: null, seen: false };
+function playStory(lines, onDone) {
+  Sound.init();
+  story.lines = lines;
+  story.i = 0;
+  story.onDone = onDone;
+  document.getElementById('story').hidden = false;
+  showStoryLine();
+}
+function showStoryLine() {
+  const [bg, who, text, sub] = story.lines[story.i];
+  const $s = id => document.getElementById(id);
+  $s('story').className = `overlay story bg-${bg}`;
+  const box = $s('stBox'), mono = $s('stMono'), title = $s('stTitle');
+  box.hidden = mono.hidden = title.hidden = true;
+  clearInterval(story.timer);
+  let target, speed = 38, blip = 0;
+  if (who === 'title') {
+    title.hidden = false;
+    $s('stTitleMain').textContent = text;
+    $s('stTitleSub').textContent = (typeof sub === 'function' ? sub() : sub) || '';
+    Sound.bigDon(0.8);
+    story.n = story.full = null;
+    return;
+  }
+  if (who === 'log') {   // こころのログに、はじめての気持ちが記録される
+    game.feelings.add(text);
+    mono.hidden = false;
+    mono.className = 'st-mono log';
+    mono.textContent = `こころのログ ＋「${FEELINGS[text].name}」`;
+    Sound.chime();
+    Sound.chime(0.25);
+    story.n = story.full = null;
+    return;
+  }
+  if (who === 'mono' || who === 'narr') {
+    mono.hidden = false;
+    mono.className = `st-mono ${who}`;
+    target = mono;
+    speed = who === 'mono' ? 55 : 40;
+    blip = who === 'mono' ? 1800 : 0;
+  } else {
+    box.hidden = false;
+    const nm = $s('stName');
+    const T = TEAMS[game.playerTeam];
+    if (who === 'ai') { nm.textContent = 'AIくん'; nm.className = 'st-name ai'; blip = 1500; }
+    else if (who === 'teacher') { nm.textContent = '先生'; nm.className = 'st-name teacher'; blip = 500; }
+    else { nm.textContent = NAMES[who]; nm.className = 'st-name mate'; nm.style.setProperty('--c', T.color); nm.style.setProperty('--ci', T.ink); blip = 700 + who * 60; }
+    target = $s('stText');
+  }
+  story.full = text;
+  story.n = 0;
+  target.textContent = '';
+  story.timer = setInterval(() => {
+    story.n++;
+    target.textContent = story.full.slice(0, story.n);
+    if (blip && story.n % 2 === 0 && story.full[story.n - 1] !== '\n') Sound.tone(blip, 0.025, { type: who === 'ai' || who === 'mono' ? 'square' : 'triangle', vol: 0.025 });
+    if (story.n >= story.full.length) clearInterval(story.timer);
+  }, speed);
+  story.target = target;
+}
+function advanceStory() {
+  if (story.full && story.n < story.full.length) {   // 文字送りの途中なら、全部出す
+    clearInterval(story.timer);
+    story.n = story.full.length;
+    story.target.textContent = story.full;
+    return;
+  }
+  story.i++;
+  if (story.i >= story.lines.length) endStory();
+  else showStoryLine();
+}
+function endStory() {
+  clearInterval(story.timer);
+  document.getElementById('story').hidden = true;
+  const done = story.onDone;
+  story.onDone = null;
+  if (done) done();
+}
+const storyOpen = () => !document.getElementById('story').hidden;
 
 // ============================================================
 // 作戦（チームの頭脳）
@@ -1180,7 +1629,7 @@ function teamBrain(team) {
   const me = humanRider();
   if (!game.demo && me && me.alive && team !== game.playerTeam && game.state === 'playing') {
     const hunters = members.filter(r => r.order.type === 'attack' && r.order.target === me.id);
-    if (hunters.length >= 2) bark(hunters[0], `${TEAMS[game.playerTeam].name}の大将を狙え！`, { key: 'hunt', cd: 15 });
+    if (hunters.length >= 2) bark(hunters[0], pick([`${TEAMS[game.playerTeam].name}のロボ大将を狙え！`, 'ロボットは戦えないぞ！', 'あの大将は丸腰だ！']), { key: 'hunt', cd: 15 });
   }
 }
 
@@ -1225,92 +1674,85 @@ function followCommand(r, enemies) {
 }
 
 // ============================================================
-// 操作（プレイヤー / CPU）
+// 操作（ロボット大将 / CPU）
 //   どちらも { mx, my, face, dash, grab } を返し、applyControl で動かす
 // ============================================================
-// ---------- 自分の騎馬の操作 ----------
-//   ・↑↓←→（WASD・ゲームパッドのスティックも可）：押した方向に進む（カメラから見た向き）
-//   ・敵が近いと自動で「組み合い」：相手を正面にとらえたまま、←→で回り込み、↓で向き合って下がる
-//   ・組み合い中に Shift＋↓ で、背を向けて全力で逃げる
-//   ・一人称のときだけは ←→ で向きを変える（視点がぐるぐる回らないように）
-const pad = { connected: false, x: 0, y: 0, dash: false, prev: [] };
-const held = (...codes) => codes.some(c => keys.has(c));
+// ---------- ロボット大将（あなた） ----------
+//   体がないので、自分では動けないし鉢巻きも取れない。騎馬は担いでいる仲間が動かす（aiRobot）
+//   あなたにできるのは指示だけ：
+//   ・声／文字入力／キー（Z 突撃・X 集合・T 集中・F おまかせ・R 気合い）
+//   ・数字キー 2〜5（または仲間をクリック）で、次の指示を受ける仲間を選ぶ
+//   ・敵をクリック：選んだ仲間（いなければ近い2騎）がその敵を狙う／自分をクリック：大将を守れ
+const pad = { connected: false, prev: [] };
 
-function readMoveInput() {
-  let ix = (held('ArrowRight', 'KeyD') ? 1 : 0) - (held('ArrowLeft', 'KeyA') ? 1 : 0);
-  let iy = (held('ArrowUp', 'KeyW') ? 1 : 0) - (held('ArrowDown', 'KeyS') ? 1 : 0);
-  if (pad.connected && Math.hypot(pad.x, pad.y) > 0.2) { ix = pad.x; iy = -pad.y; }
-  const len = Math.hypot(ix, iy);
-  if (len > 1) { ix /= len; iy /= len; }
-  return { ix, iy, dash: held('ShiftLeft', 'ShiftRight') || pad.dash };
+// 次の指示を受ける仲間を選ぶ（もう一度選ぶと外す）
+function toggleSelect(num) {
+  if (!inMatch()) return;
+  const r = game.byId.get(game.playerTeam + num);
+  if (!r || !r.alive) { showInterp(`？ ${TEAMS[game.playerTeam].name}${num} はもう退場しています`, 'err'); Sound.nope(); return; }
+  if (game.sel.has(num)) game.sel.delete(num);
+  else { game.sel.add(num); spawnPulse(r.x, r.y, '#7dd3fc'); }
+  Sound.beep();
+  updateSelUi();
+}
+function clearSelect() {
+  game.sel.clear();
+  updateSelUi();
+}
+// 選んでいる仲間を、指示の言葉の頭につける（「2番、3番、突撃」）
+function withSelected(text) {
+  const nums = [...game.sel].filter(n => { const r = game.byId.get(game.playerTeam + n); return r && r.alive; }).sort();
+  return nums.length ? `${nums.map(n => n + '番').join('、')}、${text}` : text;
 }
 
-// 組み合う相手を決める（近い敵。Q で選んだ相手はしばらく優先）
-function updateLock(r) {
-  let cur = game.lockId ? game.byId.get(game.lockId) : null;
-  if (cur && (!cur.alive || dist(r, cur) > (game.lockHold > 0 ? 260 : 190))) cur = null;
-  const near = nearestEnemy(r.team, r.x, r.y, 150);
-  let next = cur || near;
-  if (cur && near && near !== cur && game.lockHold <= 0 && dist(r, near) < dist(r, cur) * 0.6) next = near;
-  game.lockId = next ? next.id : null;
-  return next;
-}
-function switchLock() {
-  const me = humanRider();
-  if (!me || !me.alive) return;
-  const list = game.riders.filter(e => e.alive && e.team !== me.team && dist(me, e) < 260).sort((a, b) => dist(me, a) - dist(me, b));
-  if (!list.length) return;
-  const i = list.findIndex(e => e.id === game.lockId);
-  game.lockId = list[(i + 1) % list.length].id;
-  game.lockHold = 3;
-}
-
-function humanControl(r) {
-  const { ix, iy, dash } = readMoveInput();
-  const grab = grabQueued;
-  grabQueued = false;
-  const moving = Math.hypot(ix, iy) > 0.1;
-  const lock = updateLock(r);
-  const c = { mx: 0, my: 0, face: null, dash, grab, grabTarget: lock };
-
-  if (cam.mode === 'first' && !lock) {
-    const rate = (r.stagger > 0 ? 1.1 : 2.4) * (r.dashing ? 0.75 : 1);
-    r.heading = rotateToward(r.heading, r.heading + ix, Math.abs(ix) * rate * STEP);
-    c.mx = Math.cos(r.heading) * iy;
-    c.my = Math.sin(r.heading) * iy;
-    c.face = r.heading;
-    return c;
+// 3D画面のクリック：いちばん近くに見えている騎馬を選ぶ
+function riderAtScreen(px, py) {
+  let best = null, bd = 48;
+  for (const r of game.riders) {
+    if (!r.alive) continue;
+    for (const h of [40, 95]) {   // 騎馬の下のほう・騎手のあたり
+      const p = project(r.x, r.y, h);
+      if (!p.visible) continue;
+      const d = Math.hypot(p.x - px, p.y - py);
+      if (d < bd) { bd = d; best = r; }
+    }
   }
-  // 見ている向き（全体の視点では画面の上）を基準にした移動
-  const base = cam.mode === 'overview' ? -Math.PI / 2 : cam.yaw;
-  const fx = Math.cos(base), fy = Math.sin(base);
-  c.mx = fx * iy - fy * ix;
-  c.my = fy * iy + fx * ix;
-  if (lock) {
-    const ae = angleTo(r, lock);
-    const running = dash && moving && Math.abs(angleDiff(Math.atan2(c.my, c.mx), ae)) > 2.0;
-    if (!running) c.face = ae;
+  return best;
+}
+const COLOR_SPOKEN = { red: '赤', blue: '青', yellow: '黄色' };
+function clickRider(r) {
+  if (!inMatch() || !r) return;
+  if (r.human) {
+    runText(withSelected('大将を守れ'), 'クリック');
+  } else if (r.team === game.playerTeam) {
+    toggleSelect(r.num);
+  } else {
+    runText(withSelected(`${COLOR_SPOKEN[r.team]}の${r.isCaptain ? '大将' : r.num + '番'}を狙え`), 'クリック');
   }
-  return c;
+}
+// 言葉にして指示する（声・文字入力と同じ流れで、字幕にも出す）
+function runText(text, how) {
+  showHeard(`${text}（${how}）`, true);
+  if (runParsed(parseCommand(text))) clearSelect();
 }
 
-// ゲームパッド（スティックで移動、A：取る、RB/B：ダッシュ、X：気合い、Y：マイク、LB：狙い切替、Back：カメラ、Start：開始・一時停止）
+// ゲームパッド（A：全員突撃、B：全員集合、X：気合い、Y：マイク、LB：近くの敵を集中、RB：おまかせ、Back：カメラ、Start：開始・一時停止）
 function pollPad() {
   const gp = navigator.getGamepads ? [...navigator.getGamepads()].find(p => p && p.connected) : null;
   pad.connected = !!gp;
   if (!gp) return;
   const b = i => !!(gp.buttons[i] && gp.buttons[i].pressed);
-  const dz = v => Math.abs(v) > 0.2 ? v : 0;
-  pad.x = dz(gp.axes[0] || 0) || (b(15) ? 1 : 0) - (b(14) ? 1 : 0);
-  pad.y = dz(gp.axes[1] || 0) || (b(13) ? 1 : 0) - (b(12) ? 1 : 0);
-  pad.dash = b(5) || b(7) || b(1);
   const edge = i => b(i) && !pad.prev[i];
-  if (edge(0) && game.state === 'playing' && !game.demo) grabQueued = true;
-  if (edge(2) && inMatch()) quickCommand('rally');
+  if (inMatch()) {
+    if (edge(0)) quickCommand('charge');
+    if (edge(1)) quickCommand('gather');
+    if (edge(2)) quickCommand('rally');
+    if (edge(4)) quickCommand('focus');
+    if (edge(5)) quickCommand('auto');
+  }
   if (edge(3)) setMic(!voice.on);
-  if (edge(4)) switchLock();
   if (edge(8)) toggleCamera();
-  if (edge(9)) { if (!titleEl.hidden || game.state === 'over') startMatch(); else togglePause(); }
+  if (edge(9)) { if (storyOpen()) advanceStory(); else if (!titleEl.hidden) startFromTitle(); else if (game.state === 'over') startMatch(); else togglePause(); }
   pad.prev = gp.buttons.map(x => x.pressed);
 }
 
@@ -1329,6 +1771,7 @@ function aiControl(r, dt) {
   else if (o.type === 'guard' && t && t.alive) c = aiGuard(r, t, dt);
   else if (o.type === 'hold') c = aiHoldAt(r, o, dt);
   else if (o.type === 'captain') c = aiCaptain(r);
+  else if (o.type === 'human') c = aiRobot(r);
   else {
     c = { mx: 0, my: 0, face: null, dash: false, grab: false, grabTarget: null };
     if (o.type === 'attack' || o.type === 'guard') game.brainT[r.team] = 0;   // 目標がいなくなった
@@ -1355,7 +1798,7 @@ function aiControl(r, dt) {
   if (m > 1) { c.mx /= m; c.my /= m; }
 
   // 警戒：狙っている相手より近くに別の敵が来たら、そちらに正面を向ける
-  if (r.ai.alert && o.type !== 'captain') {
+  if (r.ai.alert && o.type !== 'captain' && !r.human) {
     const e = nearestEnemy(r.team, r.x, r.y, CLOSE_RANGE);
     if (e) {
       const ae = angleTo(r, e);
@@ -1367,8 +1810,8 @@ function aiControl(r, dt) {
       }
     }
   }
-  // 好機：背中を見せている敵が手の届く所にいれば取りにいく
-  if (!c.grab && r.grabCd <= 0) {
+  // 好機：背中を見せている敵が手の届く所にいれば取りにいく（ロボット大将は手を出せない）
+  if (!c.grab && r.grabCd <= 0 && !r.human) {
     const e = findGrabTarget(r);
     if (e && grabChance(r, e) >= 0.5 && Math.random() < r.ai.diff.eager * dt) {
       c.grab = true;
@@ -1483,6 +1926,27 @@ function aiCaptain(r) {
   return c;
 }
 
+// ロボット大将の騎馬（担いでいる仲間が動かす）：CPUの大将と同じく下がりながら、
+// 敵が来たら味方の騎馬の陰に隠れるように動く
+function aiRobot(r) {
+  const c = aiCaptain(r);
+  const threat = nearestEnemy(r.team, r.x, r.y, 320);
+  if (!threat) return c;
+  let shield = null, bd = 260;
+  for (const m of game.riders) {
+    if (!m.alive || m.team !== r.team || m === r) continue;
+    const d = dist(m, r);
+    if (d < bd && dist(m, threat) < dist(r, threat) + 40) { bd = d; shield = m; }
+  }
+  if (shield) {
+    const a = angleTo(threat, shield);
+    const s = steer(r, shield.x + Math.cos(a) * 72, shield.y + Math.sin(a) * 72, 40);
+    c.mx = c.mx * 0.6 + s.x * 0.8;
+    c.my = c.my * 0.6 + s.y * 0.8;
+  }
+  return c;
+}
+
 function applyControl(r, c, dt) {
   const mag = Math.hypot(c.mx, c.my);
   const moving = mag > 0.05;
@@ -1570,6 +2034,10 @@ function clampToField(r) {
 // ============================================================
 function update(dt) {
   if (game.state === 'countdown') { tickCountdown(dt); return; }
+  if (game.state === 'epilogue') {   // エピローグの間も、胴上げは続ける
+    if (game.celebrate) { celebrateStep(dt); physics(dt); }
+    return;
+  }
   if (game.state !== 'playing' && game.state !== 'ending') return;
 
   game.elapsed += dt;
@@ -1580,7 +2048,16 @@ function update(dt) {
     game.endTimer -= dt;
     if (game.endTimer <= 0) {
       if (game.demo) { newMatch(true); game.state = 'playing'; }
-      else showResult();
+      else endMatch();
+      return;
+    }
+    if (game.celebrate) {   // 勝ったあとの胴上げ
+      celebrateStep(dt);
+      for (const r of game.riders) {
+        r.cheerT = Math.max(0, r.cheerT - dt);
+        r.holdT = Math.max(0, r.holdT - dt);
+      }
+      physics(dt);
       return;
     }
   }
@@ -1618,8 +2095,8 @@ function update(dt) {
     r.stagger = Math.max(0, r.stagger - dt);
     r.holdT = Math.max(0, r.holdT - dt);
     r.cheerT = Math.max(0, r.cheerT - dt);
-    const c = r.human ? humanControl(r) : aiControl(r, dt);
-    applyControl(r, c, dt);
+    r.signalT = Math.max(0, r.signalT - dt);
+    applyControl(r, aiControl(r, dt), dt);
   }
   physics(dt);
 }
@@ -1642,6 +2119,7 @@ function tickCountdown(dt) {
     Sound.startBgm();
     game.hype = 0.5;
     game.state = 'playing';
+    feel('dokidoki');
   }
 }
 
@@ -1655,7 +2133,7 @@ function rallyStep(n) {
   if (last) { shake(5); Sound.cheer(0.8); }
 }
 
-// 大将（あなた）が囲まれそう・背後を取られそうなとき、仲間が叫ぶ
+// ロボット大将（あなた）に敵が迫ったとき：警告音を鳴らし、仲間が必死に守りに入る
 function checkDanger() {
   const me = humanRider();
   if (!me || !me.alive) return;
@@ -1667,8 +2145,12 @@ function checkDanger() {
       if (Math.abs(angleDiff(me.heading, angleTo(me, e))) > 2.0) behind = true;
     }
   }
-  if (behind) bark(nearestAlly(me), '大将、後ろ！', { key: 'danger', cd: 8, say: '大将、後ろです！', prio: 2 });
-  else if (close >= 2) bark(nearestAlly(me), '大将のそばを固めろ！', { key: 'danger', cd: 8, say: '大将のそばを、固めろ！', prio: 2 });
+  if (close) Sound.alarm();
+  const guard = nearestAlly(me);
+  if (behind) bark(guard, '大将の後ろを守れ！', { key: 'danger', cd: 8, say: '大将の後ろに回らせるな！', prio: 2 });
+  else if (close >= 2) bark(guard, '大将のそばを固めろ！', { key: 'danger', cd: 8, say: '大将のそばを、固めろ！', prio: 2 });
+  if (close >= 2) feel('kowai');
+  else if (close) bark(guard, pick(['大将には指一本触れさせねえ！', '俺が盾になる！']), { key: 'danger', cd: 8 });
 }
 
 // 残り30秒
@@ -1695,7 +2177,7 @@ const WORDS = [
   ...COLOR_WORDS.flatMap(([team, ws]) => ws.map(w => ({ w, kind: 'color', team }))),
   ...['大将', 'たいしょう', 'タイショウ'].map(w => ({ w, kind: 'captain' })),
   ...['全員', 'ぜんいん', 'みんな', '皆', '全部', 'ぜんぶ', '全軍', '全体'].map(w => ({ w, kind: 'all' })),
-  ...['俺', 'おれ', 'オレ', '私', 'わたし', '僕', 'ぼく', '自分', 'じぶん', 'あたし'].map(w => ({ w, kind: 'self' })),
+  ...['俺', 'おれ', 'オレ', '私', 'わたし', '僕', 'ぼく', '自分', 'じぶん', 'あたし', 'ロボット', 'ロボ', 'AI', 'エーアイ'].map(w => ({ w, kind: 'self' })),
 ].sort((a, b) => b.w.length - a.w.length);
 
 const RALLY_RE = /えいえい|エイエイ|えいおー|エイオー|気合|きあい|頑張|がんば|ファイト|負けるな|まけるな|勝つぞ|かつぞ|やるぞ|いくぞ|行くぞ|おー{2,}|オー{2,}/;
@@ -1881,6 +2363,8 @@ function executePlan(plan) {
   game.brainT[game.playerTeam] = 0.7;
   const who = plan.subjects.length === allies.length && allies.length > 1 ? '全員' : plan.subjects.map(tagHtml).join(' ');
   const what = actionText(plan);
+  roboSignal(`指令：${plan.subjects.length === allies.length && allies.length > 1 ? '全員' : plan.subjects.map(label).join('・')}`);
+  feel('tsutawaru');
   showInterp(`→ ${who}：${what}`, 'ok');
   showOrderBanner(`${who}　${what}`);
   addLog(`<span class="cmdtag">指示</span>${who}：${what}`);
@@ -1939,6 +2423,8 @@ function rally() {
   }
   game.moraleT = 12;
   game.moraleCd = game.elapsed + 25;
+  roboSignal('えいえいおー！');
+  feel('ittai');
   teamCheer(['オーッ！！', 'うおおお！', 'やるぞお！', 'いくぞお！'], 'おおおおーっ！');
   Sound.chorus('o', 1.0, 1.4, 0.05);
   shake(6);
@@ -1946,6 +2432,16 @@ function rally() {
   showInterp('→ 全員：気合い十分！（12秒間、動きアップ）', 'ok');
   addLog('<span class="cmdtag">気合い</span>全員の士気が上がった！');
   return true;
+}
+
+// ロボット大将が指令を出した：目が光って「ピピッ」
+function roboSignal(text) {
+  const me = humanRider();
+  game.cmdCount++;
+  if (!me || !me.alive) return;
+  me.signalT = 0.8;
+  Sound.robo();
+  popup(me.x, me.y, text, { cls: 'bubble shout robo', h: 175, life: 1.6 });
 }
 
 // 指示を実行する（成功したら true）
@@ -1972,10 +2468,12 @@ function runParsed(p) {
 
 // キーボードでの指示（マイクが使えないとき用）
 function quickCommand(kind) {
-  const texts = { charge: '全員、突撃', gather: '全員、集まれ', focus: '近くの敵を狙え', auto: '全員、自由に戦え', rally: 'えいえいおー！' };
-  const p = parseCommand(texts[kind]);
-  showHeard(`${texts[kind]}（キー）`, true);
-  runParsed(p);
+  // 数字キーで仲間を選んでいれば、その仲間だけに出す
+  const sel = game.sel.size > 0;
+  const texts = sel
+    ? { charge: '突撃', gather: '大将を守れ', focus: '近くの敵を狙え', auto: '自由に戦え', rally: 'えいえいおー！' }
+    : { charge: '全員、突撃', gather: '全員、集まれ', focus: '近くの敵を狙え', auto: '全員、自由に戦え', rally: 'えいえいおー！' };
+  runText(kind === 'rally' ? texts.rally : withSelected(texts[kind]), 'キー');
 }
 
 // ============================================================
@@ -2248,18 +2746,44 @@ const Talk = {
       if ((o.prio || 1) < 2) return false;
       speechSynthesis.cancel();
     }
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'ja-JP';
-    if (this.voice) u.voice = this.voice;
-    u.pitch = o.pitch ?? 1;
-    u.rate = o.rate ?? 1.25;
-    voice.lastTts = normalizeCommand(text);
-    voice.ignoreUntil = performance.now() + 1500 + text.length * 200;
-    u.onend = u.onerror = () => { voice.ignoreUntil = Math.min(voice.ignoreUntil, performance.now() + 800); };
+    const u = this.utter(text, o.pitch, o.rate);
+    this.heard(text);
     speechSynthesis.speak(u);
     return true;
   },
-  stop() { if (this.ok) speechSynthesis.cancel(); },
+  utter(text, pitch, rate) {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ja-JP';
+    if (this.voice) u.voice = this.voice;
+    u.pitch = pitch ?? 1;
+    u.rate = rate ?? 1.25;
+    u.onend = u.onerror = () => { voice.ignoreUntil = Math.min(voice.ignoreUntil, performance.now() + 800); };
+    return u;
+  },
+  // 読み上げた声をマイクが拾っても、指示とまちがえないようにする
+  heard(text) {
+    voice.lastTts = normalizeCommand(text);
+    voice.ignoreUntil = performance.now() + 1500 + text.length * 200;
+  },
+  // 何人かのセリフを順番に読み上げる（items: [{ text, pitch, onstart }]）。読み上げられないときは false
+  qid: 0,
+  queue(items, delayMs = 0) {
+    if (!this.ok || !this.enabled || Sound.muted || game.demo || !items.length) return false;
+    speechSynthesis.cancel();
+    const id = ++this.qid;
+    const go = () => {
+      if (id !== this.qid) return;   // 待っている間に取り消された
+      for (const it of items) {
+        const u = this.utter(it.text, it.pitch);
+        u.onstart = () => { this.heard(it.text); if (it.onstart) it.onstart(); };
+        speechSynthesis.speak(u);
+      }
+    };
+    if (delayMs) setTimeout(go, delayMs); else go();
+    return true;
+  },
+  busy() { return this.ok && (speechSynthesis.speaking || speechSynthesis.pending); },
+  stop() { if (this.ok) { this.qid++; speechSynthesis.cancel(); } },
 };
 if (Talk.ok) {
   Talk.pickVoice();
@@ -2583,6 +3107,7 @@ function makeRiderModel(r) {
   const rider = new THREE.Group();
   rider.position.x = -2;
   body.add(rider);
+  if (r.human) return finishModel(r, root, body, bearers, rider, makeRobot(r, rider));
   const torso = mesh(GEO.rTorso, MAT.shirt);
   torso.position.y = 62;
   for (const s of [-1, 1]) {
@@ -2612,6 +3137,10 @@ function makeRiderModel(r) {
   const flag = mesh(GEO.flag, new THREE.MeshLambertMaterial({ color: '#ffffff' }));   // 取った鉢巻き
   flag.visible = false;
   rider.add(torso, head, hair, band, armL, armR, handL, handR, flag);
+  return finishModel(r, root, body, bearers, rider, { head, hair, band, tails, armL, handL, armR, handR, flag });
+}
+
+function finishModel(r, root, body, bearers, rider, parts) {
   // 気合いが入ったときの足元のオーラ
   const aura = new THREE.Mesh(AURA_GEO, AURA_MAT);
   aura.rotation.x = -Math.PI / 2;
@@ -2627,7 +3156,74 @@ function makeRiderModel(r) {
     o.material = own.get(o.material);
   });
   scene.add(root);
-  return { root, body, bearers, rider, head, hair, band, tails, armL, handL, armR, handR, flag, aura, mats: [...own.values()], fade: 1, poofed: false };
+  const m = { root, body, bearers, rider, ...parts, aura, mats: [...own.values()], fade: 1, poofed: false };
+  if (parts.eye) m.eyeMat = parts.eye.material;   // 複製したあとの材質（光らせる）
+  return m;
+}
+
+// ロボット大将：金属の体、光る目とアンテナ。鉢巻きはほかの騎手と同じ位置に巻く
+const ROBO_MAT = {
+  metal: new THREE.MeshStandardMaterial({ color: '#d5dde6', metalness: 0.3, roughness: 0.38 }),
+  dark: new THREE.MeshStandardMaterial({ color: '#3a4254', metalness: 0.25, roughness: 0.5 }),
+  eye: new THREE.MeshStandardMaterial({ color: '#0b1220', emissive: '#38e1ff', emissiveIntensity: 1.2 }),
+};
+const ROBO_GEO = {
+  torso: new THREE.BoxGeometry(15, 24, 18),
+  head: new THREE.CylinderGeometry(7.6, 7.6, 14, 20),
+  visor: new THREE.BoxGeometry(2, 4.4, 11),
+  mast: new THREE.CylinderGeometry(0.7, 0.7, 9, 6),
+  tip: new THREE.SphereGeometry(2, 10, 8),
+  ear: new THREE.CylinderGeometry(2.6, 2.6, 2.2, 12),
+  chest: new THREE.BoxGeometry(1.4, 7, 9),
+};
+function makeRobot(r, rider) {
+  const tm = TEAM_MAT[r.team];
+  const torso = mesh(ROBO_GEO.torso, ROBO_MAT.metal);
+  torso.position.y = 62;
+  const chest = mesh(ROBO_GEO.chest, ROBO_MAT.eye);    // 胸のランプ
+  chest.position.set(7.9, 64, 0);
+  for (const s of [-1, 1]) {
+    const leg = mesh(GEO.limb, ROBO_MAT.dark);
+    orientLimb(leg, new V3(0, 51, s * 5), new V3(-10, 44, s * 13));
+    leg.scale.x = leg.scale.z = 1.5;
+    rider.add(leg);
+  }
+  const head = new THREE.Group();
+  const skull = mesh(ROBO_GEO.head, ROBO_MAT.metal);
+  skull.position.y = 84;
+  const eye = mesh(ROBO_GEO.visor, ROBO_MAT.eye);      // 横一文字に光る目
+  eye.position.set(7.2, 83, 0);
+  const ears = [-1, 1].map(s => {
+    const e = mesh(ROBO_GEO.ear, ROBO_MAT.dark);
+    e.rotation.x = Math.PI / 2;
+    e.position.set(0, 83, s * 8.2);
+    return e;
+  });
+  head.add(skull, eye, ...ears);
+  const hair = new THREE.Group();                       // 一人称のときに隠す部分（アンテナ）
+  const mast = mesh(ROBO_GEO.mast, ROBO_MAT.dark);
+  mast.position.y = 95;
+  const tip = mesh(ROBO_GEO.tip, ROBO_MAT.eye);
+  tip.position.y = 100;
+  hair.add(mast, tip);
+  const band = mesh(GEO.band, tm.band);
+  band.position.y = 87;
+  band.rotation.x = Math.PI / 2;
+  const tails = [-1, 1].map(s => {
+    const t = mesh(GEO.tail, tm.band);
+    t.position.set(-8, 87, s * 1.8);
+    t.rotation.y = Math.PI;
+    t.scale.x = 22;                                     // 大将の長い鉢巻き
+    rider.add(t);
+    return t;
+  });
+  const armL = mesh(GEO.limb, ROBO_MAT.dark), armR = mesh(GEO.limb, ROBO_MAT.dark);
+  armL.scale.x = armL.scale.z = 1.2;
+  const handL = mesh(GEO.hand, ROBO_MAT.metal), handR = mesh(GEO.hand, ROBO_MAT.metal);
+  const flag = mesh(GEO.flag, new THREE.MeshLambertMaterial({ color: '#ffffff' }));
+  flag.visible = false;
+  rider.add(torso, chest, head, hair, band, armL, armR, handL, handR, flag);
+  return { head, hair, band, tails, armL, handL, armR, handR, flag, eye, robo: true };
 }
 const AURA_GEO = new THREE.RingGeometry(28, 46, 40);
 const AURA_MAT = new THREE.MeshBasicMaterial({ color: '#ff9a3c', transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending });
@@ -2802,7 +3398,7 @@ function syncRider(r, m, time) {
     b.legR.rotation.z = -sw;
   });
   // 一人称のときは自分の頭を隠す（カメラが頭の位置にあるため）
-  const fp = r.human && cam.mode === 'first' && !game.demo;
+  const fp = r.human && cam.mode === 'first' && !game.demo && !game.celebrate;
   m.head.visible = m.hair.visible = !fp;
   // 一人称のとき、すぐ近くにいて視界をふさぐ味方は半透明に
   let fade = 1;
@@ -2853,6 +3449,13 @@ function syncRider(r, m, time) {
   // 気合いのオーラ
   m.aura.visible = r.alive && pumped(r);
   if (m.aura.visible) m.aura.scale.setScalar(1 + 0.12 * Math.sin(time * 8 + r.num));
+  // ロボット大将：指令を出すと目が強く光る。勝ったら胴上げで宙に舞う
+  if (m.robo) {
+    m.eyeMat.emissiveIntensity = !r.alive ? 0.08 : 1.1 + 0.25 * Math.sin(time * 3) + r.signalT * 3;
+    const toss = game.celebrate && game.celebT > 1.2 ? Math.abs(Math.sin((game.celebT - 1.2) * Math.PI / 1.1)) : 0;
+    m.rider.position.y = toss * 70;
+    m.rider.rotation.z = toss * 0.25;
+  }
   // 上下の揺れと、退場したときに崩れる動き
   if (r.alive) {
     m.body.position.y = Math.abs(Math.sin(r.step * 1.6)) * 2.2 * k;
@@ -2866,51 +3469,58 @@ function syncRider(r, m, time) {
   }
 }
 
+// 選んだ仲間の足元の輪（数字キー・クリックで選択中）
+const selMat = overlayMat('#7dd3fc', 0.9);
+const selRings = Array.from({ length: UNITS }, () => {
+  const m = flat(new THREE.RingGeometry(34, 40, 40), selMat, 0, 1.25, 0);
+  m.renderOrder = 3;
+  m.visible = false;
+  return m;
+});
+const hover = { id: null, x: 0, y: 0 };   // マウスを乗せている騎馬
+
 function syncMarkers(time) {
   const me = humanRider();
-  const active = me && me.alive && game.state === 'playing';
-  reachGroup.visible = meRing.visible = !!(me && me.alive && !game.demo);
+  reachGroup.visible = false;
   targetRing.visible = false;
-  const lock = me && me.alive && !game.demo && game.lockId ? game.byId.get(game.lockId) : null;
-  lockGroup.visible = !!(lock && lock.alive && game.state === 'playing');
-  if (lockGroup.visible) {
-    lockGroup.position.set(wx(lock.x), 1.5, wz(lock.y));
-    lockGroup.rotation.y = time * 2.5;
-    lockMat.color.set(TEAMS[lock.team].color);
+  meRing.visible = !!(me && me.alive && !game.demo);
+  if (meRing.visible) {
+    meRing.position.set(wx(me.x), 1.1, wz(me.y));
+    meMat.opacity = 0.55 + 0.3 * Math.sin(time * 4);
   }
+  // 選んでいる仲間
+  const sel = inMatch() ? [...game.sel].map(n => game.byId.get(game.playerTeam + n)).filter(r => r && r.alive) : [];
+  selRings.forEach((m, i) => {
+    const r = sel[i];
+    m.visible = !!r;
+    if (r) { m.position.set(wx(r.x), 1.25, wz(r.y)); m.scale.setScalar(1 + 0.06 * Math.sin(time * 6)); }
+  });
+  // マウスを乗せている騎馬：クリックすると何が起きるかを出す
+  const h = inMatch() && hover.id ? game.byId.get(hover.id) : null;
+  lockGroup.visible = !!(h && h.alive);
   hintEl.style.display = 'none';
-  if (!me || !me.alive) return;
-  meRing.position.set(wx(me.x), 1.1, wz(me.y));
-  meMat.opacity = 0.55 + 0.3 * Math.sin(time * 4);
-  reachGroup.position.set(wx(me.x), 1.2, wz(me.y));
-  reachGroup.rotation.y = -me.heading;
-  reachMat.opacity = active && me.grabCd <= 0 ? 0.24 : 0.07;
-  if (!active) return;
-  const t = findGrabTarget(me);
-  if (!t) return;
-  const ch = grabChance(me, t);
-  const color = ch >= 0.6 ? '#4ade80' : ch >= 0.35 ? '#facc15' : '#f87171';
-  targetRing.visible = true;
-  targetRing.position.set(wx(t.x), 1.3, wz(t.y));
-  targetMat.color.set(color);
-  const p = project(t.x, t.y, 0);
-  if (p.visible) {
-    hintEl.style.display = '';
-    hintEl.style.color = color;
-    hintEl.textContent = `${Math.round(ch * 100)}%`;
-    hintEl.style.transform = `translate(${p.x}px, ${p.y + 26}px) translate(-50%, 0)`;
-  }
+  if (!lockGroup.visible) return;
+  lockGroup.position.set(wx(h.x), 1.5, wz(h.y));
+  lockGroup.rotation.y = time * 2.5;
+  const mine = h.team === game.playerTeam;
+  lockMat.color.set(mine ? '#7dd3fc' : TEAMS[h.team].color);
+  const p = project(h.x, h.y, 0);
+  if (!p.visible) return;
+  hintEl.style.display = '';
+  hintEl.style.color = mine ? '#7dd3fc' : '#ffffff';
+  hintEl.textContent = h.human ? 'クリック：大将を守らせる' : mine ? (game.sel.has(h.num) ? 'クリック：選ぶのをやめる' : 'クリック：この仲間を選ぶ') : 'クリック：この敵を狙わせる';
+  hintEl.style.transform = `translate(${p.x}px, ${p.y + 26}px) translate(-50%, 0)`;
 }
 
 // ---------- カメラ ----------
-//   一人称：騎手の目の高さ（標準）／背後：主人公を背中側から映す／全体：会場を見下ろす
+//   全体：会場を見下ろす（標準。AIは会場ぜんぶを見て指示を出す）／背後：ロボット大将を背中側から映す／ロボ目線：ロボットの目の高さ
 const CAM_MODES = {
-  behind:   { label: '背後',   fov: 58 },
-  first:    { label: '一人称', fov: 70 },
-  overview: { label: '全体',   fov: 40 },
+  overview: { label: '全体',     fov: 40 },
+  behind:   { label: '背後',     fov: 58 },
+  first:    { label: 'ロボ目線', fov: 70 },
 };
-const CAM_ORDER = ['first', 'behind', 'overview'];
-const cam = { mode: 'first', pos: new V3(0, 900, 900), look: new V3(), yaw: 0, shake: 0, fov: 40, snap: false };
+const CAM_ORDER = ['overview', 'behind', 'first'];
+const cam = { mode: 'overview', pos: new V3(0, 900, 900), look: new V3(), yaw: 0, shake: 0, fov: 40, snap: false };
 const camTarget = new V3(), lookTarget = new V3();
 const ELEV = 0.95;   // 俯瞰の角度（ラジアン）
 function overviewDistance() {
@@ -2926,6 +3536,12 @@ function updateCamera(dt, time) {
     const d = overviewDistance(), a = time * 0.07;
     camTarget.set(Math.sin(a) * d * Math.cos(ELEV), d * Math.sin(ELEV), Math.cos(a) * d * Math.cos(ELEV));
     lookTarget.set(0, 0, 0);
+  } else if (game.celebrate) {
+    // 胴上げ：ロボット大将のまわりをゆっくり回りながら映す
+    const a = game.celebT * 0.35 + me.heading + 0.6, px = wx(me.x), pz = wz(me.y);
+    camTarget.set(px + Math.cos(a) * 300, 175, pz + Math.sin(a) * 300);
+    lookTarget.set(px, 85, pz);
+    follow = 2.5;
   } else if (mode === 'overview') {
     const d = overviewDistance();
     camTarget.set(0, d * Math.sin(ELEV), d * Math.cos(ELEV));
@@ -2985,10 +3601,8 @@ function toggleCamera() {
   if (me) cam.yaw = me.heading;
   updateCamUi();
 }
-// カメラに合わせて、操作の説明も変える
 function updateCamUi() {
   $('#camBtn').textContent = `カメラ：${CAM_MODES[cam.mode].label}（C）`;
-  $('#k1t').textContent = cam.mode === 'first' ? 'W S 前後・A D 向き（矢印キーも可）' : cam.mode === 'overview' ? '移動（画面の向き・矢印キーも可）' : '押した方向に進む（矢印キーも可）';
 }
 
 // ---------- ミニマップ（自分の向きが上。背後・一人称のとき） ----------
@@ -3100,8 +3714,8 @@ function buildLabels() {
   pops.length = 0;
   for (const r of game.riders) {
     const el = document.createElement('div');
-    el.className = `plate ${r.team}${r.isCaptain ? ' cap' : ''}`;
-    el.textContent = (r.isCaptain ? '★' : '') + label(r);
+    el.className = `plate ${r.team}${r.isCaptain ? ' cap' : ''}${r.human ? ' robo' : ''}`;
+    el.textContent = r.human ? '★AIくん' : (r.isCaptain ? '★' : '') + label(r);
     if (r.human) {
       const you = document.createElement('span');
       you.className = 'you';
@@ -3150,6 +3764,7 @@ function updateLabels(dt) {
     el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%) scale(${sc.toFixed(3)})`;
     el.classList.toggle('out', !r.alive);
     el.classList.toggle('cmd', r.alive && !!r.command);
+    el.classList.toggle('sel', r.alive && !r.human && r.team === game.playerTeam && game.sel.has(r.num) && inMatch());
   }
   for (let i = pops.length - 1; i >= 0; i--) {
     const pp = pops[i];
@@ -3273,11 +3888,17 @@ function buildHud() {
       <span class="tname">${T.full}</span>${me ? '<span class="you">あなた</span>' : ''}
       <span class="dots">${dots}</span><span class="score">0本</span></div>`;
   }).join('');
+  updateKokoro(false);
   const T = TEAMS[game.playerTeam];
-  rosterEl.innerHTML = Array.from({ length: UNITS }, (_, i) =>
-    `<li data-id="${game.playerTeam}${i + 1}"><span class="tag ${game.playerTeam}">${T.name}${i + 1}</span><span class="desc"></span></li>`
+  rosterEl.innerHTML = Array.from({ length: UNITS }, (_, i) => i === 0
+    ? `<li data-id="${game.playerTeam}1"><span class="tag ${game.playerTeam}">★1</span><b class="nm">AIくん</b><span class="desc"></span></li>`
+    : `<li class="pick" data-id="${game.playerTeam}${i + 1}" data-num="${i + 1}"><span class="tag ${game.playerTeam}">${T.name}${i + 1}</span><b class="nm">${NAMES[i + 1]}</b><span class="desc"></span><span class="key">${i + 1}</span></li>`
   ).join('');
   updateHud();
+}
+// 選んでいる仲間を、名簿にも出す
+function updateSelUi() {
+  for (const li of rosterEl.children) li.classList.toggle('sel', !!li.dataset.num && game.sel.has(+li.dataset.num));
 }
 
 function describe(r) {
@@ -3318,12 +3939,16 @@ function updateHud() {
     logEl.innerHTML = game.log.slice(0, 10).map(e => `<li><span class="t">${fmtTime(e.t)}</span>${e.html}</li>`).join('');
     game.logDirty = false;
   }
+  // ロボット大将のまわりの危なさ（近くにいる敵の数）
   const me = humanRider();
-  const st = $('#stamina');
+  const st = $('#danger');
   st.style.visibility = me && me.alive && !game.demo ? 'visible' : 'hidden';
-  if (me) {
-    $('#stamFill').style.width = `${me.stamina}%`;
-    st.classList.toggle('low', me.stamina < 25);
+  if (me && me.alive) {
+    let near = 0;
+    for (const e of game.riders) if (e.alive && e.team !== me.team && dist(me, e) < 220) near++;
+    const lv = near >= 2 ? 2 : near;
+    $('#dangerText').textContent = ['安全', '敵が接近', '危険！'][lv];
+    st.dataset.lv = lv;
   }
   const mb = $('#moraleBadge');
   mb.hidden = !(game.moraleT > 0 && !game.demo);
@@ -3332,6 +3957,7 @@ function updateHud() {
 
 function startMatch() {
   Sound.init();
+  Talk.stop();
   newMatch(false);
   titleEl.hidden = true;
   resultEl.hidden = true;
@@ -3340,10 +3966,8 @@ function startMatch() {
   cam.yaw = humanRider().heading;
   cam.snap = true;
   cam.fov = CAM_MODES[cam.mode].fov;
-  addLog(`${TEAMS[game.playerTeam].full}の大将として出陣！`);
-  addLog(cam.mode === 'first'
-    ? 'W・S（↑↓）で前進・後退、A・D（←→）で向きを変える。敵と組み合うとA・Dで回り込める。C でカメラ切替'
-    : 'WASD（↑↓←→）で押した方向に進む。敵に近づくと自動で組み合い、A・Dで回り込める');
+  addLog(`${TEAMS[game.playerTeam].full}の大将・AIくんとして出陣！ あなたは戦えない。指示でみんなを導こう`);
+  addLog('数字キー 2〜5 や仲間のクリックで選び、敵をクリックすると狙わせられます。Z 突撃／X 集合');
   if (!voice.on) addLog('V キーでマイクをONにすると、声で味方に指示できます');
   game.state = 'countdown';
   game.countdown = 3;
@@ -3352,6 +3976,14 @@ function startMatch() {
   Sound.bgm.last30 = false;
   stepPhase.clear();
   rallyStep(3);
+}
+
+// タイトルから始める：はじめての1回は、プロローグ（物語）から
+function startFromTitle() {
+  if (story.seen) { startMatch(); return; }
+  story.seen = true;
+  titleEl.hidden = true;
+  playStory(PROLOGUE, startMatch);
 }
 
 function openTitle() {
@@ -3366,20 +3998,36 @@ function openTitle() {
   syncTitleChoices();
 }
 
+// 試合のあと：エピローグ（優勝なら友情と「うれしい」、負けなら「くやしい」）→ 結果画面
+function endMatch() {
+  game.state = 'epilogue';
+  Talk.stop();
+  Sound.stopBgm();
+  const win = game.result.place === 1;
+  Sound.setCrowd(win ? 0.05 : 0);
+  if (!win) Sound.lose();
+  document.getElementById('thought').classList.remove('show');
+  thoughtQ.length = 0;
+  playStory(win ? epilogueWin() : epilogueLose(game.result.reason), showResult);
+}
+
+let resultAt = 0;
 function showResult() {
   game.state = 'over';
+  resultAt = performance.now();
+  game.celebrate = false;
   const res = game.result;
   const win = res.place === 1;
   let title, sub;
   if (win) {
-    title = '勝利！';
-    sub = res.reason === 'time' ? '時間切れ — 残った騎馬の数で1位' : 'ほかの2チームの大将を討ち取った！';
+    title = '優勝！';
+    sub = res.reason === 'time' ? '時間切れ — 取った鉢巻きの数で1位。AIくんの指示が、みんなを優勝へ導いた！' : 'ほかの2チームの大将を討ち取った。AIくんの指示が、みんなを優勝へ導いた！';
   } else if (res.reason === 'captain') {
     title = '敗北…';
-    sub = 'あなた（大将）の鉢巻きを取られた';
+    sub = 'AIくん（あなた）の鉢巻きを取られた';
   } else {
     title = `${res.place}位`;
-    sub = '時間切れ — 残った騎馬の数で判定';
+    sub = '時間切れ — 取った鉢巻きの数で判定';
   }
   const rows = res.rows.map((row, i) => `
     <li class="${row.team === game.playerTeam ? 'me' : ''}">
@@ -3387,12 +4035,17 @@ function showResult() {
       <span class="tag ${row.team}">${TEAMS[row.team].full}</span>
       <span class="rinfo">${row.out ? '大将が討たれた' : `残り${row.alive}騎`}・鉢巻き${row.caps}本</span>
     </li>`).join('');
+  const praise = game.praise.map(p => `<li>${tagHtml(p.r)}<b class="nm">${NAMES[p.r.num]}</b><span>${escapeHtml(p.text)}</span></li>`).join('');
+  const feels = [...game.feelings].map(k => `<span class="feel${k === 'ureshii' || k === 'kuyashii' ? ' big' : ''}">${FEELINGS[k].name}</span>`).join('');
   $('#resultCard').innerHTML = `
     <h2 class="res-title${win ? ' win' : ''}">${title}</h2>
     <p class="res-sub">${sub}</p>
+    ${praise ? `<div class="praise-h">${win ? '仲間からのことば' : '仲間のことば'}</div><ul class="praise-list${win ? ' win' : ''}">${praise}</ul>` : ''}
+    ${feels ? `<div class="praise-h">AIくんが知った気持ち（こころのログ）</div><div class="feels">${feels}</div>` : ''}
     <ol class="ranking">${rows}</ol>
     <div class="stats">
-      <div class="stat"><div class="v">${res.myCaps}本</div><div class="k">あなたが取った鉢巻き</div></div>
+      <div class="stat"><div class="v">${res.cmds}回</div><div class="k">出した指示</div></div>
+      <div class="stat"><div class="v">${res.teamCaps}本</div><div class="k">仲間が取った鉢巻き</div></div>
       <div class="stat"><div class="v">${fmtTime(res.time)}</div><div class="k">試合時間</div></div>
     </div>
     <button class="primary" id="againBtn">もう一度<small>Enter</small></button>
@@ -3403,12 +4056,8 @@ function showResult() {
   Sound.stopBgm();
   Sound.setCrowd(win ? 0.07 : 0);
   if (win) {
-    Sound.win();
-    Sound.chorus('o', 1.4, 1.4, 0.3);
-    Talk.say('勝ったぞおおお！', { pitch: 0.9, prio: 3 });
-  } else {
-    Sound.lose();
-    Talk.say('大将おおお！', { pitch: 0.8, prio: 3 });
+    Talk.say('AIくん、ばんざーい！', { pitch: 0.9, prio: 3 });
+    Sound.chorus('ai', 1.2, 1.2, 0.2);
   }
 }
 
@@ -3452,6 +4101,11 @@ function toggleMute() {
 // ============================================================
 const inMatch = () => !game.demo && (game.state === 'playing' || game.state === 'countdown');
 window.addEventListener('keydown', e => {
+  if (storyOpen()) {                                   // 物語を読んでいるとき
+    if (e.code === 'Escape') endStory();
+    else if (['Enter', 'NumpadEnter', 'Space', 'ArrowRight'].includes(e.code) && !e.repeat) { e.preventDefault(); advanceStory(); }
+    return;
+  }
   if (!micHelpEl.hidden) {                             // 直し方の画面を開いているとき
     if (e.code === 'Escape') closeMicHelp();
     return;
@@ -3460,14 +4114,19 @@ window.addEventListener('keydown', e => {
     if (e.code === 'Escape') e.target.blur();
     return;
   }
-  if (!game.demo && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+  if (!game.demo && e.code === 'Space') e.preventDefault();
   if (e.code === 'Enter' || e.code === 'NumpadEnter') {
     if (e.target instanceof HTMLButtonElement) return;   // ボタンのクリックに任せる
-    if (!titleEl.hidden || game.state === 'over') startMatch();
+    if (!titleEl.hidden) startFromTitle();
+    else if (game.state === 'over' && performance.now() - resultAt > 1200) startMatch();   // 物語を読み進めたEnterで、結果をすぐ飛ばさない
+    else if (game.state === 'ending' && game.celebrate) game.endTimer = 0;   // 胴上げを飛ばす
     return;
   }
+  if (e.code === 'Escape' && game.sel.size && inMatch()) { clearSelect(); return; }   // 選んだ仲間を外す
   if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); return; }
   if (e.repeat) return;
+  const num = /^(Digit|Numpad)([2-5])$/.exec(e.code);
+  if (num) { toggleSelect(+num[2]); return; }
   switch (e.code) {
     case 'KeyM': toggleMute(); return;
     case 'KeyV': setMic(!voice.on); return;
@@ -3477,10 +4136,28 @@ window.addEventListener('keydown', e => {
     case 'KeyT': if (inMatch()) quickCommand('focus'); return;
     case 'KeyF': if (inMatch()) quickCommand('auto'); return;
     case 'KeyR': if (inMatch()) quickCommand('rally'); return;
-    case 'KeyQ': if (inMatch()) switchLock(); return;
   }
   keys.add(e.code);
-  if (e.code === 'Space' && game.state === 'playing' && !game.demo) grabQueued = true;
+});
+// 3D画面のクリック・マウスを乗せたとき
+function canvasPoint(e) {
+  const rect = canvas.getBoundingClientRect();
+  return [(e.clientX - rect.left) / rect.width * view.w, (e.clientY - rect.top) / rect.height * view.h];
+}
+canvas.addEventListener('click', e => {
+  if (!inMatch()) return;
+  const r = riderAtScreen(...canvasPoint(e));
+  if (r) clickRider(r);
+});
+canvas.addEventListener('mousemove', e => {
+  const r = inMatch() ? riderAtScreen(...canvasPoint(e)) : null;
+  hover.id = r ? r.id : null;
+  canvas.style.cursor = r ? 'pointer' : '';
+});
+canvas.addEventListener('mouseleave', () => { hover.id = null; });
+rosterEl.addEventListener('click', e => {
+  const li = e.target.closest('li[data-num]');
+  if (li) toggleSelect(+li.dataset.num);
 });
 window.addEventListener('keyup', e => keys.delete(e.code));
 window.addEventListener('blur', () => keys.clear());
@@ -3503,7 +4180,9 @@ $('#mhClose').addEventListener('click', closeMicHelp);
 $('#talkToggle').addEventListener('change', e => { Talk.enabled = e.target.checked; if (!Talk.enabled) Talk.stop(); });
 if (!Talk.ok) { $('#talkToggle').checked = false; $('#talkToggle').disabled = true; }
 $('#camBtn').addEventListener('click', () => { toggleCamera(); $('#camBtn').blur(); });
-$('#startBtn').addEventListener('click', startMatch);
+$('#startBtn').addEventListener('click', startFromTitle);
+$('#prologueBtn').addEventListener('click', () => { story.seen = false; startFromTitle(); });
+$('#story').addEventListener('click', e => { if (e.target.id === 'stSkip') endStory(); else advanceStory(); });
 $('#quitBtn').addEventListener('click', openTitle);
 $('#muteBtn').addEventListener('click', toggleMute);
 document.querySelectorAll('#teamChoices .choice').forEach(b => b.addEventListener('click', () => {
@@ -3543,6 +4222,7 @@ function frame(now) {
   updateAudioMood(realDt);
   if (running) updateBodySounds(dt);
   updateMicMeter(realDt);
+  if (running) updateThought(realDt);
   if (bannerTimer > 0) {
     bannerTimer -= dt;
     if (bannerTimer <= 0) bannerEl.classList.remove('show');
@@ -3639,7 +4319,7 @@ openTitle();
 requestAnimationFrame(frame);
 
 // デバッグ用（ブラウザの開発者ツールから試せる）
-window.kibasen = { game, update, STEP, newMatch, startMatch, parseCommand, planCommand, runParsed, humanRider, grabChance, canGrab, capture, teamBrain, voice, setMic, camera, cam, drawFrame, updateHud, toggleCamera, quickCommand, switchLock, Talk, Sound, pad, mic, showMicHelp, updateMicMeter, updateBodySounds, panFor };
+window.kibasen = { game, update, STEP, newMatch, startMatch, parseCommand, planCommand, runParsed, humanRider, grabChance, canGrab, capture, teamBrain, voice, setMic, camera, cam, drawFrame, updateHud, toggleCamera, quickCommand, toggleSelect, clickRider, story, advanceStory, endStory, Talk, Sound, pad, mic, showMicHelp, updateMicMeter, updateBodySounds, panFor };
 </script>
 </body>
 </html>
