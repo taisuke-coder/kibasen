@@ -486,6 +486,7 @@
         <ul id="log"></ul>
       </section>
       <section class="panel keys">
+        <kbd>WASD</kbd><span class="wide">騎馬を動かす（矢印キーも可・Shift でダッシュ）</span>
         <kbd>2〜5</kbd><span class="wide">指示する仲間を選ぶ（仲間をクリックでも）</span>
         <kbd>クリック</kbd><span class="wide">敵：狙わせる／大将：守らせる</span>
         <kbd>V</kbd><span>マイク</span>
@@ -531,6 +532,7 @@
       <li>大将（★）の鉢巻きを取られたチームは全員退場。3分たったら、取った鉢巻きの数で判定</li>
     </ul>
     <div class="keyline">
+      <span><kbd>WASD</kbd> 騎馬を動かす</span>
       <span><kbd>2</kbd>〜<kbd>5</kbd> 仲間を選ぶ</span>
       <span><kbd>Z</kbd> 突撃</span>
       <span><kbd>X</kbd> 守れ</span>
@@ -1002,6 +1004,7 @@ const game = {
   hype: 0,           // 盛り上がり（歓声・太鼓の強さ）
   sel: new Set(),    // 数字キー・クリックで選んだ、次の指示を受ける仲間の番号
   cmdCount: 0,       // 出した指示の数
+  manualT: 0,        // ロボット大将の騎馬を、あなたがキーで動かしている（残り秒数。0 なら仲間まかせ）
   celebrate: false,  // 勝ったあとの胴上げ・ほめたたえる場面
   celebT: 0,
   praise: [],        // 仲間からのことば [{ r, text }]
@@ -1063,7 +1066,7 @@ function newMatch(demo) {
     log: [], logDirty: true, endTimer: 0, result: null,
     brainT: { red: 0.2, blue: 0.43, yellow: 0.66 },
     moraleT: 0, moraleCd: 0, lockId: null, lockHold: 0, dangerT: 1, said30: false, hype: 0,
-    cmdCount: 0, celebrate: false, celebT: 0, praise: [], feelings: new Set(),
+    cmdCount: 0, celebrate: false, celebT: 0, praise: [], feelings: new Set(), manualT: 0,
   });
   thoughtQ.length = 0;
   game.sel.clear();
@@ -1678,12 +1681,57 @@ function followCommand(r, enemies) {
 //   どちらも { mx, my, face, dash, grab } を返し、applyControl で動かす
 // ============================================================
 // ---------- ロボット大将（あなた） ----------
-//   体がないので、自分では動けないし鉢巻きも取れない。騎馬は担いでいる仲間が動かす（aiRobot）
+//   体がないので、鉢巻きは取れない。騎馬は担いでいる仲間が動かす
 //   あなたにできるのは指示だけ：
+//   ・WASD／矢印キー（ゲームパッドのスティックも可）：担いでいる仲間に「こっちへ」と伝えて騎馬を動かす
+//     （Shift でダッシュ。キーを離して3秒たつと、仲間の判断で動く「おまかせ」に戻る：aiRobot）
 //   ・声／文字入力／キー（Z 突撃・X 集合・T 集中・F おまかせ・R 気合い）
 //   ・数字キー 2〜5（または仲間をクリック）で、次の指示を受ける仲間を選ぶ
 //   ・敵をクリック：選んだ仲間（いなければ近い2騎）がその敵を狙う／自分をクリック：大将を守れ
-const pad = { connected: false, prev: [] };
+const pad = { connected: false, x: 0, y: 0, dash: false, prev: [] };
+const held = (...codes) => codes.some(c => keys.has(c));
+const MANUAL_HOLD = 3;   // キーを離してから、おまかせに戻るまでの秒数
+
+function readMoveInput() {
+  let ix = (held('ArrowRight', 'KeyD') ? 1 : 0) - (held('ArrowLeft', 'KeyA') ? 1 : 0);
+  let iy = (held('ArrowUp', 'KeyW') ? 1 : 0) - (held('ArrowDown', 'KeyS') ? 1 : 0);
+  if (pad.connected && Math.hypot(pad.x, pad.y) > 0.2) { ix = pad.x; iy = -pad.y; }
+  const len = Math.hypot(ix, iy);
+  if (len > 1) { ix /= len; iy /= len; }
+  return { ix, iy, dash: held('ShiftLeft', 'ShiftRight') || pad.dash };
+}
+
+// ロボット大将の騎馬：キーで動かしている間は、あなたの言うとおりに。離して3秒たつと仲間まかせ
+function robotControl(r, dt) {
+  const inp = readMoveInput();
+  const moving = Math.hypot(inp.ix, inp.iy) > 0.1;
+  if (moving) game.manualT = MANUAL_HOLD;
+  else game.manualT = Math.max(0, game.manualT - dt);
+  if (game.manualT <= 0) return aiControl(r, dt);
+  const c = { mx: 0, my: 0, face: null, dash: inp.dash, grab: false, grabTarget: null };
+  // ロボ目線：W S で前後、A D で向きを変える
+  if (cam.mode === 'first') {
+    const rate = (r.stagger > 0 ? 1.1 : 2.4) * (r.dashing ? 0.75 : 1);
+    r.heading = rotateToward(r.heading, r.heading + inp.ix, Math.abs(inp.ix) * rate * dt);
+    c.mx = Math.cos(r.heading) * inp.iy;
+    c.my = Math.sin(r.heading) * inp.iy;
+    c.face = r.heading;
+    return c;
+  }
+  // 全体・背後の視点：押した方向（画面から見た向き）に進む
+  const base = cam.mode === 'overview' ? -Math.PI / 2 : cam.yaw;
+  const fx = Math.cos(base), fy = Math.sin(base);
+  c.mx = fx * inp.iy - fy * inp.ix;
+  c.my = fy * inp.iy + fx * inp.ix;
+  // 近くに敵がいれば、背中を見せないように正面を向けたまま動く（ダッシュで逃げるときは背を向ける）
+  const near = nearestEnemy(r.team, r.x, r.y, 150);
+  if (near) {
+    const ae = angleTo(r, near);
+    const running = inp.dash && moving && Math.abs(angleDiff(Math.atan2(c.my, c.mx), ae)) > 2.0;
+    if (!running) c.face = ae;
+  }
+  return c;
+}
 
 // 次の指示を受ける仲間を選ぶ（もう一度選ぶと外す）
 function toggleSelect(num) {
@@ -1736,12 +1784,16 @@ function runText(text, how) {
   if (runParsed(parseCommand(text))) clearSelect();
 }
 
-// ゲームパッド（A：全員突撃、B：全員集合、X：気合い、Y：マイク、LB：近くの敵を集中、RB：おまかせ、Back：カメラ、Start：開始・一時停止）
+// ゲームパッド（スティック：騎馬を動かす、トリガー：ダッシュ、A：全員突撃、B：全員集合、X：気合い、Y：マイク、LB：近くの敵を集中、RB：おまかせ、Back：カメラ、Start：開始・一時停止）
 function pollPad() {
   const gp = navigator.getGamepads ? [...navigator.getGamepads()].find(p => p && p.connected) : null;
   pad.connected = !!gp;
   if (!gp) return;
   const b = i => !!(gp.buttons[i] && gp.buttons[i].pressed);
+  const dz = v => Math.abs(v) > 0.2 ? v : 0;
+  pad.x = dz(gp.axes[0] || 0) || (b(15) ? 1 : 0) - (b(14) ? 1 : 0);
+  pad.y = dz(gp.axes[1] || 0) || (b(13) ? 1 : 0) - (b(12) ? 1 : 0);
+  pad.dash = b(7) || b(6);
   const edge = i => b(i) && !pad.prev[i];
   if (inMatch()) {
     if (edge(0)) quickCommand('charge');
@@ -2096,7 +2148,7 @@ function update(dt) {
     r.holdT = Math.max(0, r.holdT - dt);
     r.cheerT = Math.max(0, r.cheerT - dt);
     r.signalT = Math.max(0, r.signalT - dt);
-    applyControl(r, aiControl(r, dt), dt);
+    applyControl(r, r.human ? robotControl(r, dt) : aiControl(r, dt), dt);
   }
   physics(dt);
 }
@@ -3903,7 +3955,7 @@ function updateSelUi() {
 
 function describe(r) {
   if (!r.alive) return '<span class="muted">退場</span>';
-  if (r.human) return '大将（あなた）';
+  if (r.human) return game.manualT > 0 ? '大将（あなた）・キーで移動中' : '大将（あなた）・移動は仲間まかせ';
   const o = r.order, t = o.target && game.byId.get(o.target);
   let s = '待機';
   if (o.type === 'captain') s = '大将';
@@ -3968,6 +4020,7 @@ function startMatch() {
   cam.fov = CAM_MODES[cam.mode].fov;
   addLog(`${TEAMS[game.playerTeam].full}の大将・AIくんとして出陣！ あなたは戦えない。指示でみんなを導こう`);
   addLog('数字キー 2〜5 や仲間のクリックで選び、敵をクリックすると狙わせられます。Z 突撃／X 集合');
+  addLog('WASD（矢印キー）で、あなたを担ぐ騎馬を動かせます。離して3秒たつと仲間まかせに戻ります');
   if (!voice.on) addLog('V キーでマイクをONにすると、声で味方に指示できます');
   game.state = 'countdown';
   game.countdown = 3;
@@ -4114,7 +4167,7 @@ window.addEventListener('keydown', e => {
     if (e.code === 'Escape') e.target.blur();
     return;
   }
-  if (!game.demo && e.code === 'Space') e.preventDefault();
+  if (!game.demo && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
   if (e.code === 'Enter' || e.code === 'NumpadEnter') {
     if (e.target instanceof HTMLButtonElement) return;   // ボタンのクリックに任せる
     if (!titleEl.hidden) startFromTitle();
