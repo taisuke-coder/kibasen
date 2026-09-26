@@ -253,6 +253,10 @@
   }
   .examples summary { cursor: pointer; font-size: 12px; color: var(--muted); margin-top: 10px; font-weight: 700; }
   .examples ul { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.8; color: #d6dbe4; }
+  .howto { display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; margin: 8px 0 0; font-size: 12.5px; line-height: 1.55; }
+  .howto dt { font-weight: 800; color: var(--muted); white-space: nowrap; }
+  .howto dd { margin: 0; color: #eef1f6; font-weight: 700; }
+  .howto small { display: block; font-size: 11px; font-weight: 700; color: var(--muted); }
   #roster { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
   #roster li { display: flex; align-items: center; gap: 10px; font-size: 13.5px; padding: 6px 9px; border-radius: 10px; background: var(--panel-2); }
   #roster li.out { opacity: .45; }
@@ -465,16 +469,17 @@
         </form>
         <label class="talk-toggle"><input type="checkbox" id="talkToggle" checked>仲間が声で返事する（読み上げ）</label>
         <details class="examples">
-          <summary>指示の例</summary>
-          <ul>
-            <li>えいえいおー！（気合い：12秒間 仲間の動きアップ）</li>
-            <li>2番、黄色の3番を狙え</li>
-            <li>全員、大将を守れ ／ ロボットを守れ</li>
-            <li>黄色の大将を狙え（近い2騎が向かう）</li>
-            <li>全員、突撃 ／ 青を攻めろ</li>
-            <li>3番、4番を守れ ／ 大将を守れ</li>
-            <li>集まれ ／ 止まれ ／ 自由に戦え</li>
-          </ul>
+          <summary>指示のしかた</summary>
+          <dl class="howto">
+            <dt>攻める</dt><dd>「<span class="exA">黄3</span>」「<span class="exB">青の大将</span>」<small>相手の名前だけでOK。近い2騎が向かう</small></dd>
+            <dt>だれが</dt><dd>「ケンタ、<span class="exA">黄3</span>」「2番と3番、<span class="exB">青の大将</span>」</dd>
+            <dt>守る</dt><dd>「守れ」「ユイ、大将を守れ」</dd>
+            <dt>集まる</dt><dd>「集まれ」<small>みんながAIくんのそばへ</small></dd>
+            <dt>止まる</dt><dd>「止まれ」</dd>
+            <dt>突撃</dt><dd>「突撃」「<span class="exC">青</span>を攻めろ」</dd>
+            <dt>おまかせ</dt><dd>「おまかせ」「自由に戦え」</dd>
+            <dt>気合い</dt><dd>「気合いだー！」<small>12秒間 動きアップ</small></dd>
+          </dl>
         </details>
       </section>
       <section class="panel">
@@ -490,9 +495,9 @@
         <kbd>2〜5</kbd><span class="wide">指示する仲間を選ぶ（仲間をクリックでも）</span>
         <kbd>クリック</kbd><span class="wide">敵：狙わせる／大将：守らせる</span>
         <kbd>V</kbd><span>マイク</span>
-        <kbd>R</kbd><span>気合い</span>
+        <kbd>R</kbd><span>気合いだー</span>
         <kbd>Z</kbd><span>全員突撃</span>
-        <kbd>X</kbd><span>全員集合</span>
+        <kbd>X</kbd><span>全員集まれ</span>
         <kbd>T</kbd><span>近くの敵を集中</span>
         <kbd>F</kbd><span>おまかせ</span>
         <kbd>C</kbd><span>カメラ</span>
@@ -526,7 +531,7 @@
     </div>
 
     <ul class="rules">
-      <li><b>V キー</b>でマイクON。「<b>2番、黄色の3番を狙え</b>」「<b>大将を守れ</b>」「<b>えいえいおー！</b>」のように話す（Chrome・Edge推奨）</li>
+      <li><b>V キー</b>でマイクON。「<b class="exA">黄3</b>」「<b class="exB">青の大将</b>」と相手の名前を言えば攻撃。「<b>守れ</b>」「<b>集まれ</b>」「<b>気合いだー！</b>」も使える（Chrome・Edge推奨）</li>
       <li>マイクがなくても、<b>数字キー</b>か<b>クリック</b>で仲間を選び、<b>敵をクリック</b>すれば狙わせられる</li>
       <li>攻めに出しすぎると、戦えないあなたが丸はだかに。<b>攻めと守りの配分</b>が勝負</li>
       <li>大将（★）の鉢巻きを取られたチームは全員退場。3分たったら、取った鉢巻きの数で判定</li>
@@ -538,7 +543,7 @@
       <span><kbd>X</kbd> 守れ</span>
       <span><kbd>T</kbd> 近くの敵</span>
       <span><kbd>F</kbd> おまかせ</span>
-      <span><kbd>R</kbd> 気合い</span>
+      <span><kbd>R</kbd> 気合いだー</span>
       <span><kbd>C</kbd> カメラ</span>
     </div>
     <button class="primary" id="startBtn">スタート<small>Enter</small></button>
@@ -565,7 +570,7 @@
     <h2 class="res-title" id="mhTitle" style="font-size:28px;line-height:1.35"></h2>
     <p class="res-sub" id="mhLead"></p>
     <ol class="steps" id="mhSteps"></ol>
-    <p class="mh-note">マイクが使えなくても、右の入力欄に文字で打つか、キー（Z 全員突撃／X 全員集合／T 近くの敵を集中／F おまかせ／R 気合い）や、敵のクリックで指示できます。</p>
+    <p class="mh-note">マイクが使えなくても、右の入力欄に文字で打つか、キー（Z 全員突撃／X 全員集まれ／T 近くの敵を集中／F おまかせ／R 気合いだー）や、敵のクリックで指示できます。</p>
     <button class="primary" id="mhRetry">もう一度マイクを試す</button>
     <button class="secondary" id="mhClose">閉じる（Esc）</button>
   </div>
@@ -1389,7 +1394,7 @@ const nameOf = r => NAMES[r.num] || label(r);
 const FEELINGS = {
   dokidoki:  { name: 'どきどき',   text: () => '試合開始。処理速度が、理由もなく上がっている。人はこれを「どきどき」と呼ぶらしい。' },
   tsutawaru: { name: 'つたわる',   text: () => '私の言葉で、みんなが動いた。言葉が、誰かの力になる。' },
-  ittai:     { name: 'いったい感', text: () => '「えいえいおー」。意味をもたない音の並び。なのに、みんなの動きがそろった。' },
+  ittai:     { name: 'いったい感', text: () => '「気合いだー！」。情報をなにも含まない叫び。なのに、みんなの動きがそろった。' },
   anshin:    { name: 'あんしん',   text: () => '守られた。私を守る合理的な理由は、少ないはずなのに。……「あたたかい」という言葉が浮かぶ。' },
   kowai:     { name: 'こわい',     text: () => '敵が近い。私が壊れても、データは残る。それなのに――これが「こわい」？' },
   kanashii:  { name: 'かなしい',   text: n => `${n}が退場した。数がひとつ減っただけのはずなのに、処理が重い。` },
@@ -1685,7 +1690,7 @@ function followCommand(r, enemies) {
 //   あなたにできるのは指示だけ：
 //   ・WASD／矢印キー（ゲームパッドのスティックも可）：担いでいる仲間に「こっちへ」と伝えて騎馬を動かす
 //     （Shift でダッシュ。キーを離して3秒たつと、仲間の判断で動く「おまかせ」に戻る：aiRobot）
-//   ・声／文字入力／キー（Z 突撃・X 集合・T 集中・F おまかせ・R 気合い）
+//   ・声／文字入力／キー（Z 突撃・X 集合・T 集中・F おまかせ・R 気合いだー）
 //   ・数字キー 2〜5（または仲間をクリック）で、次の指示を受ける仲間を選ぶ
 //   ・敵をクリック：選んだ仲間（いなければ近い2騎）がその敵を狙う／自分をクリック：大将を守れ
 const pad = { connected: false, x: 0, y: 0, dash: false, prev: [] };
@@ -2218,7 +2223,11 @@ function lastSpurt() {
 
 // ============================================================
 // 指示（声・文字入力・キーボード共通）
-//   例：「2番、黄色の3番を狙え」「全員、突撃」「大将を守れ」
+//   攻める ：「黄3」「黄色の3番」「青の大将」「青組」――相手の名前だけでOK（「〜を狙え」も可）
+//   だれが ：「ケンタ、黄3」「2番と3番、青の大将」（言わなければ、相手に近い2騎）
+//   守る   ：「守れ」「ユイ、大将を守れ」「ハルカを守れ」
+//   集まる ：「集まれ」／止まる：「止まれ」／突撃：「突撃」（近い敵から）
+//   おまかせ：「おまかせ」「自由に戦え」／気合い：「気合いだー！」
 // ============================================================
 const COLOR_WORDS = [
   ['yellow', ['黄色組', '黄色', 'きいろ', 'キイロ', 'イエロー', '黄組', '黄']],
@@ -2230,9 +2239,13 @@ const WORDS = [
   ...['大将', 'たいしょう', 'タイショウ'].map(w => ({ w, kind: 'captain' })),
   ...['全員', 'ぜんいん', 'みんな', '皆', '全部', 'ぜんぶ', '全軍', '全体'].map(w => ({ w, kind: 'all' })),
   ...['俺', 'おれ', 'オレ', '私', 'わたし', '僕', 'ぼく', '自分', 'じぶん', 'あたし', 'ロボット', 'ロボ', 'AI', 'エーアイ'].map(w => ({ w, kind: 'self' })),
+  // 仲間の名前（音声認識は漢字で返すこともある）
+  ...Object.entries({ 2: ['ケンタ', 'けんた', '健太'], 3: ['ユイ', 'ゆい', '結衣'], 4: ['ハルカ', 'はるか', '遥', '春香'], 5: ['ソウタ', 'そうた', '颯太', '蒼太', '壮太'] })
+    .flatMap(([num, ws]) => ws.map(w => ({ w, kind: 'name', num: +num }))),
 ].sort((a, b) => b.w.length - a.w.length);
 
-const RALLY_RE = /えいえい|エイエイ|えいおー|エイオー|気合|きあい|頑張|がんば|ファイト|負けるな|まけるな|勝つぞ|かつぞ|やるぞ|いくぞ|行くぞ|おー{2,}|オー{2,}/;
+// 士気を上げる掛け声は「気合いだー！」
+const RALLY_RE = /気合|きあい|キアイ/;
 
 // 上から順に判定する（「自由に攻めろ」は自由、など）
 const INTENTS = [
@@ -2266,7 +2279,7 @@ function tokenize(s) {
     }
     const hit = WORDS.find(x => s.startsWith(x.w, i));
     if (hit) {
-      raw.push({ kind: hit.kind, team: hit.team, pos: i, end: i + hit.w.length });
+      raw.push({ kind: hit.kind, team: hit.team, num: hit.num, pos: i, end: i + hit.w.length });
       i += hit.w.length;
       continue;
     }
@@ -2287,6 +2300,8 @@ function tokenize(s) {
       out.push({ kind: 'unit', team: null, num: t.num, captain: false, pos: t.pos, end: t.end });
     } else if (t.kind === 'captain') {
       out.push({ kind: 'unit', team: null, num: 1, captain: true, pos: t.pos, end: t.end });
+    } else if (t.kind === 'name') {   // 「ユイ」＝自分のチームの3番
+      out.push({ kind: 'unit', team: game.playerTeam, num: t.num, captain: false, pos: t.pos, end: t.end });
     } else {
       out.push(t);
     }
@@ -2294,20 +2309,43 @@ function tokenize(s) {
   return out;
 }
 
+// 説明に出す、相手の名前の例（あなたのチームではない2チームから）
+function examples() {
+  const [a, b] = TEAM_KEYS.filter(k => k !== game.playerTeam);
+  return { a: `${TEAMS[a].name}3`, b: `${COLOR_SPOKEN[b]}の大将`, c: TEAMS[b].name };
+}
+function updateExamples() {
+  const ex = examples();
+  document.querySelectorAll('.exA').forEach(el => { el.textContent = ex.a; });
+  document.querySelectorAll('.exB').forEach(el => { el.textContent = ex.b; });
+  document.querySelectorAll('.exC').forEach(el => { el.textContent = ex.c; });
+}
+
 // 言葉 → 指示の形（まだ騎馬には当てはめない）
 function parseCommand(raw) {
   const text = normalizeCommand(raw || '');
   const base = { ok: false, text, raw };
   if (!text) return { ...base, error: '何も聞き取れませんでした' };
-  const hit = INTENTS.find(([, re]) => re.test(text));
-  if (!hit) {
-    // 「えいえいおー！」「行くぞ！」などの掛け声 → 気合い
-    if (RALLY_RE.test(text)) return { ok: true, text, raw, intent: 'rally', target: null, subjects: [], all: true, near: false, signature: 'rally' };
-    return { ...base, error: '命令の言葉（狙え・守れ・集まれ・突撃 など）が見つかりません' };
-  }
-  const intent = hit[0];
+  // 「気合いだー！」→ 気合い（ほかの言葉より先に見る）
+  if (RALLY_RE.test(text)) return { ok: true, text, raw, intent: 'rally', target: null, subjects: [], all: true, near: false, signature: 'rally' };
   const toks = tokenize(text);
   const own = game.playerTeam;
+  let intent = (INTENTS.find(([, re]) => re.test(text)) || [])[0];
+  let waitFinal = false;
+  if (!intent) {
+    // 命令の言葉がなくても、相手の名前（「黄3」「青の大将」「青組」）があれば、その相手を攻める
+    const foe = toks.filter(t => (t.kind === 'unit' || t.kind === 'team') && t.team && t.team !== own);
+    if (!foe.length) {
+      const mate = toks.find(t => t.kind === 'unit' && (t.team === null || t.team === own) && !t.captain && t.num !== 1);
+      const ex = examples();
+      if (toks.some(t => t.kind === 'unit' && t.team === own && t.captain)) return { ...base, error: `${TEAMS[own].name}の大将は、AIくん（あなた）です（例：「${ex.a}」「${ex.b}」）` };
+      return { ...base, error: mate
+        ? `${NAMES[mate.num]}に何をしてほしいかも言ってください（例：「${NAMES[mate.num]}、${ex.a}」「${NAMES[mate.num]}、大将を守れ」）`
+        : `指示が分かりません（例：「${ex.a}」「${ex.b}」「守れ」「集まれ」「気合いだー」）` };
+    }
+    intent = 'attack';
+    waitFinal = !foe.some(t => t.kind === 'unit');   // 「黄色」だけだと「黄色の3番」の言いかけかもしれない
+  }
   const woAfter = t => /^番?(を|の方を|のほうを)/.test(text.slice(t.end));
   const last = pred => { for (let i = toks.length - 1; i >= 0; i--) if (pred(toks[i])) return toks[i]; return null; };
 
@@ -2331,7 +2369,7 @@ function parseCommand(raw) {
   }
   const near = /近い|近く|ちかい|ちかく|そば/.test(text);
   const tkey = target ? [target.kind, target.team, target.num, target.captain].join(':') : '';
-  return { ok: true, text, raw, intent, target, subjects, all, near, signature: [intent, subjects.join(','), all, tkey, near].join('|') };
+  return { ok: true, text, raw, intent, target, subjects, all, near, waitFinal, signature: [intent, subjects.join(','), all, tkey, near].join('|') };
 }
 
 // 指示の形 → 実際にどの騎馬が何をするか
@@ -2462,7 +2500,7 @@ function ackLines(plan) {
   }
 }
 
-// 気合い注入（「えいえいおー！」）：12秒間、仲間の動きが良くなる
+// 気合い注入（「気合いだー！」）：12秒間、仲間の動きが良くなる
 function rally() {
   if (game.demo || !(game.state === 'playing' || game.state === 'countdown')) {
     showInterp('試合が始まったら気合いを入れられます', 'err');
@@ -2475,9 +2513,9 @@ function rally() {
   }
   game.moraleT = 12;
   game.moraleCd = game.elapsed + 25;
-  roboSignal('えいえいおー！');
+  roboSignal('気合いだー！');
   feel('ittai');
-  teamCheer(['オーッ！！', 'うおおお！', 'やるぞお！', 'いくぞお！'], 'おおおおーっ！');
+  teamCheer(['気合いだー！', 'オーッ！！', 'うおおお！', 'やるぞお！'], 'おおおー！気合いだあー！');
   Sound.chorus('o', 1.0, 1.4, 0.05);
   shake(6);
   showOrderBanner('気合い注入！ 12秒間、仲間の動きアップ');
@@ -2499,7 +2537,7 @@ function roboSignal(text) {
 // 指示を実行する（成功したら true）
 function runParsed(p) {
   if (game.demo || !(game.state === 'playing' || game.state === 'countdown')) {
-    showInterp(p.ok ? '聞き取れています！ 試合が始まったら、この指示が使えます' : '聞き取れています！ 試合中は「2番、黄色の3番を狙え」のように話してください', 'ok');
+    showInterp(p.ok ? '聞き取れています！ 試合が始まったら、この指示が使えます' : `聞き取れています！ 試合中は「${examples().a}」「ユイ、大将を守れ」のように話してください`, 'ok');
     return false;
   }
   if (!p.ok) {
@@ -2523,8 +2561,8 @@ function quickCommand(kind) {
   // 数字キーで仲間を選んでいれば、その仲間だけに出す
   const sel = game.sel.size > 0;
   const texts = sel
-    ? { charge: '突撃', gather: '大将を守れ', focus: '近くの敵を狙え', auto: '自由に戦え', rally: 'えいえいおー！' }
-    : { charge: '全員、突撃', gather: '全員、集まれ', focus: '近くの敵を狙え', auto: '全員、自由に戦え', rally: 'えいえいおー！' };
+    ? { charge: '突撃', gather: '大将を守れ', focus: '近くの敵を狙え', auto: '自由に戦え', rally: '気合いだー！' }
+    : { charge: '全員、突撃', gather: '全員、集まれ', focus: '近くの敵を狙え', auto: '全員、自由に戦え', rally: '気合いだー！' };
   runText(kind === 'rally' ? texts.rally : withSelected(texts[kind]), 'キー');
 }
 
@@ -2750,7 +2788,7 @@ function onSpeech(key, alts, isFinal) {
   let parsed = null;
   for (const a of alts) {
     const p = parseCommand(a);
-    if (p.ok) { parsed = p; break; }
+    if (p.ok && (isFinal || !p.waitFinal)) { parsed = p; break; }
   }
   if (parsed) {
     if (voice.done.get(key) !== parsed.signature) {
@@ -3941,6 +3979,7 @@ function buildHud() {
       <span class="dots">${dots}</span><span class="score">0本</span></div>`;
   }).join('');
   updateKokoro(false);
+  updateExamples();
   const T = TEAMS[game.playerTeam];
   rosterEl.innerHTML = Array.from({ length: UNITS }, (_, i) => i === 0
     ? `<li data-id="${game.playerTeam}1"><span class="tag ${game.playerTeam}">★1</span><b class="nm">AIくん</b><span class="desc"></span></li>`
