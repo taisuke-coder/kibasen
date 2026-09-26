@@ -153,6 +153,8 @@
   #moraleBadge[hidden] { display: none; }
   #moraleBadge .bar { width: 90px; height: 7px; border-radius: 99px; background: rgba(255,255,255,.15); overflow: hidden; }
   #moraleBadge .bar i { display: block; height: 100%; background: linear-gradient(90deg, #ff7a18, #ffd54a); }
+  #moraleBadge.wait { color: var(--muted); }
+  #moraleBadge.wait .bar i { background: #5b6474; }
   .meter-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 11px; font-weight: 800; color: var(--muted); }
   .meter-row[hidden] { display: none; }
   .meter { flex: 1; height: 8px; border-radius: 99px; background: var(--panel-2); overflow: hidden; }
@@ -437,7 +439,7 @@
       <div id="speedLines"></div>
       <div id="flash"></div>
       <div id="orderBanner"><span class="ob-k">作戦</span><span id="obText"></span></div>
-      <div id="moraleBadge" hidden>気合い<div class="bar"><i id="moraleFill"></i></div></div>
+      <div id="moraleBadge" hidden><span id="moraleText">気合い</span><div class="bar"><i id="moraleFill"></i></div></div>
       <div id="micBadge" hidden><span class="rec-dot"></span><span id="micBadgeText">音声指示 ON</span><span class="mini-meter"><i id="micBadgeLevel"></i></span></div>
       <div id="thought"><div class="th-k" id="thKey">こころのログ</div><div class="th-t" id="thText"></div></div>
       <div id="banner"></div>
@@ -2245,7 +2247,8 @@ const WORDS = [
 ].sort((a, b) => b.w.length - a.w.length);
 
 // 士気を上げる掛け声は「気合いだー！」
-const RALLY_RE = /気合|きあい|キアイ/;
+//   音声認識は短い言葉を聞き間違えやすいので、よくある聞き間違い（期待だ・機会だ など）も受け付ける
+const RALLY_RE = /気合|氣合|きあい|キアイ|木合|気愛|期待だ|機会だ|来たいだ|きたいだ/;
 
 // 上から順に判定する（「自由に攻めろ」は自由、など）
 const INTENTS = [
@@ -2509,13 +2512,15 @@ function rally() {
   const wait = Math.ceil(game.moraleCd - game.elapsed);
   if (wait > 0) {
     showInterp(`気合いは あと${wait}秒 で入れられます`, 'err');
+    showOrderBanner(`気合いは あと${wait}秒 で入れられます`);
+    Sound.nope();
     return false;
   }
   game.moraleT = 12;
   game.moraleCd = game.elapsed + 25;
   roboSignal('気合いだー！');
   feel('ittai');
-  teamCheer(['気合いだー！', 'オーッ！！', 'うおおお！', 'やるぞお！'], 'おおおー！気合いだあー！');
+  teamCheer(['気合いだー！', 'オーッ！！', 'うおおお！', 'やるぞお！'], 'おおおおーっ！やるぞお！');   // 読み上げには「気合い」を入れない（マイクが拾うと、次の「気合いだ」を聞き逃すため）
   Sound.chorus('o', 1.0, 1.4, 0.05);
   shake(6);
   showOrderBanner('気合い注入！ 12秒間、仲間の動きアップ');
@@ -4041,9 +4046,15 @@ function updateHud() {
     $('#dangerText').textContent = ['安全', '敵が接近', '危険！'][lv];
     st.dataset.lv = lv;
   }
+  // 気合い：効いている間は残り時間、次に入れられるまでの間は待ち時間を出す
   const mb = $('#moraleBadge');
-  mb.hidden = !(game.moraleT > 0 && !game.demo);
-  if (!mb.hidden) $('#moraleFill').style.width = `${game.moraleT / 12 * 100}%`;
+  const cd = Math.ceil(game.moraleCd - game.elapsed);
+  mb.hidden = game.demo || !(game.moraleT > 0 || (cd > 0 && inMatch()));
+  mb.classList.toggle('wait', game.moraleT <= 0);
+  if (!mb.hidden) {
+    $('#moraleText').textContent = game.moraleT > 0 ? '気合い' : `気合い あと${cd}秒`;
+    $('#moraleFill').style.width = game.moraleT > 0 ? `${game.moraleT / 12 * 100}%` : `${(1 - cd / 13) * 100}%`;
+  }
 }
 
 function startMatch() {
@@ -4411,7 +4422,7 @@ openTitle();
 requestAnimationFrame(frame);
 
 // デバッグ用（ブラウザの開発者ツールから試せる）
-window.kibasen = { game, update, STEP, newMatch, startMatch, parseCommand, planCommand, runParsed, humanRider, grabChance, canGrab, capture, teamBrain, voice, setMic, camera, cam, drawFrame, updateHud, toggleCamera, quickCommand, toggleSelect, clickRider, story, advanceStory, endStory, Talk, Sound, pad, mic, showMicHelp, updateMicMeter, updateBodySounds, panFor };
+window.kibasen = { game, update, STEP, newMatch, startMatch, parseCommand, planCommand, runParsed, humanRider, grabChance, canGrab, capture, teamBrain, voice, setMic, camera, cam, drawFrame, updateHud, toggleCamera, quickCommand, toggleSelect, clickRider, story, advanceStory, endStory, onSpeech, isEcho, Talk, Sound, pad, mic, showMicHelp, updateMicMeter, updateBodySounds, panFor };
 </script>
 </body>
 </html>
