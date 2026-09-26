@@ -269,6 +269,7 @@
     border-radius: 6px; padding: 2px 7px; white-space: nowrap; justify-self: start;
   }
   .keys .row-btn { grid-column: 1 / -1; }
+  .keys #k1t { grid-column: 2 / -1; }
   .ghost {
     width: 100%; padding: 7px 10px; border-radius: 10px; cursor: pointer;
     border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); font-weight: 700; font-size: 13px;
@@ -302,6 +303,7 @@
   }
   .rules b { color: #fff; }
   .keyline { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12.5px; color: var(--muted); margin-bottom: 16px; }
+  .keyline kbd + kbd { margin-left: 3px; }
   .primary {
     width: 100%; font-size: 18px; font-weight: 800; padding: 14px; border-radius: 14px; border: 0;
     background: var(--gold); color: #231a00; cursor: pointer;
@@ -400,7 +402,7 @@
         <ul id="log"></ul>
       </section>
       <section class="panel keys">
-        <kbd id="k1">↑↓←→</kbd><span id="k1t">押した方向に進む</span>
+        <kbd id="k1">WASD</kbd><span id="k1t">押した方向に進む（矢印キーも可）</span>
         <kbd>Q</kbd><span>組み合う相手を切替</span>
         <kbd>Space</kbd><span>鉢巻きを取る</span>
         <kbd>Shift</kbd><span>ダッシュ</span>
@@ -442,13 +444,13 @@
     <ul class="rules">
       <li>全騎馬に<b>番号札</b>（赤1〜5・青1〜5・黄1〜5）。<b>★</b>が大将</li>
       <li><b>V キー</b>でマイクON。「<b>2番、黄色の3番を狙え</b>」のように話す（Chrome・Edge推奨）。「<b>えいえいおー！</b>」で気合いが入る</li>
-      <li>敵に近づくと自動で<b>組み合い</b>。←→で相手のまわりを回り込み、背中を取れ</li>
+      <li>敵に近づくと自動で<b>組み合い</b>。A・D（←→）で相手のまわりを回り込み、背中を取れ</li>
       <li>相手の<b>背中・横</b>から取りにいくほど成功しやすい。正面からだとかわされやすい</li>
       <li>大将の鉢巻きを取られたチームは全員退場。最後に残ったチームの勝ち（3分で判定）</li>
     </ul>
     <div class="keyline">
-      <span><kbd>↑↓</kbd> 前進・後退</span>
-      <span><kbd>←→</kbd> 向きを変える（組み合うと回り込み）</span>
+      <span><kbd>W</kbd><kbd>S</kbd>（↑↓）前進・後退</span>
+      <span><kbd>A</kbd><kbd>D</kbd>（←→）向きを変える（組み合うと回り込み）</span>
       <span><kbd>Space</kbd> 取る</span>
       <span><kbd>Shift</kbd> ダッシュ</span>
       <span><kbd>Q</kbd> 相手を切替</span>
@@ -2986,7 +2988,7 @@ function toggleCamera() {
 // カメラに合わせて、操作の説明も変える
 function updateCamUi() {
   $('#camBtn').textContent = `カメラ：${CAM_MODES[cam.mode].label}（C）`;
-  $('#k1t').textContent = cam.mode === 'first' ? '↑↓前後・←→向き' : cam.mode === 'overview' ? '移動（画面の向き）' : '押した方向に進む';
+  $('#k1t').textContent = cam.mode === 'first' ? 'W S 前後・A D 向き（矢印キーも可）' : cam.mode === 'overview' ? '移動（画面の向き・矢印キーも可）' : '押した方向に進む（矢印キーも可）';
 }
 
 // ---------- ミニマップ（自分の向きが上。背後・一人称のとき） ----------
@@ -3340,8 +3342,8 @@ function startMatch() {
   cam.fov = CAM_MODES[cam.mode].fov;
   addLog(`${TEAMS[game.playerTeam].full}の大将として出陣！`);
   addLog(cam.mode === 'first'
-    ? '↑↓で前進・後退、←→で向きを変える。敵と組み合うと←→で回り込める。C でカメラ切替'
-    : '↑↓←→ で押した方向に進む。敵に近づくと自動で組み合い、←→で回り込める');
+    ? 'W・S（↑↓）で前進・後退、A・D（←→）で向きを変える。敵と組み合うとA・Dで回り込める。C でカメラ切替'
+    : 'WASD（↑↓←→）で押した方向に進む。敵に近づくと自動で組み合い、A・Dで回り込める');
   if (!voice.on) addLog('V キーでマイクをONにすると、声で味方に指示できます');
   game.state = 'countdown';
   game.countdown = 3;
