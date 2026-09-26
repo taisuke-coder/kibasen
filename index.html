@@ -114,7 +114,6 @@
   .pop.bubble.yellow { border-color: #d4a200; }
   .pop.bubble.robo { background: #0b1220; color: #7ff0ff; border-color: #38e1ff; font-family: ui-monospace, 'Consolas', monospace; }
   .pop.bubble.praise { font-size: 15px; white-space: normal; width: max-content; max-width: 300px; text-align: center; line-height: 1.45; }
-  .plate.sel { box-shadow: 0 0 0 3px #7dd3fc, 0 2px 6px rgba(0,0,0,.25); }
   .plate.robo { background: #0b1220; color: #7ff0ff; border-color: #38e1ff; }
   .plate.ack { animation: ackPulse .9s ease-out; }
   @keyframes ackPulse {
@@ -262,10 +261,6 @@
   #roster { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
   #roster li { display: flex; align-items: center; gap: 10px; font-size: 13.5px; padding: 6px 9px; border-radius: 10px; background: var(--panel-2); }
   #roster li.out { opacity: .45; }
-  #roster li.pick { cursor: pointer; }
-  #roster li.pick:hover { background: #2c3441; }
-  #roster li.sel { box-shadow: inset 0 0 0 2px #7dd3fc; }
-  #roster .key { flex: none; font-size: 10.5px; font-weight: 800; color: var(--muted); border: 1px solid #3a4252; border-radius: 5px; padding: 0 5px; }
   .h2note { font-weight: 700; letter-spacing: 0; font-size: 11px; color: #6b7587; margin-left: 6px; }
   #roster .desc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #log { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; font-size: 13px; overflow: auto; align-content: start; }
@@ -286,6 +281,7 @@
   }
   .keys .row-btn { grid-column: 1 / -1; }
   .keys .wide { grid-column: 2 / -1; }
+  .keys .keynote { font-weight: 700; color: #cbd5e1; }
   .ghost {
     width: 100%; padding: 7px 10px; border-radius: 10px; cursor: pointer;
     border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); font-weight: 700; font-size: 13px;
@@ -470,8 +466,8 @@
           <button type="submit">送る</button>
         </form>
         <label class="talk-toggle"><input type="checkbox" id="talkToggle" checked>仲間が声で返事する（読み上げ）</label>
-        <details class="examples">
-          <summary>指示のしかた</summary>
+        <details class="examples" open>
+          <summary>声での指示のしかた</summary>
           <dl class="howto">
             <dt>攻める</dt><dd>「<span class="exA">黄3</span>」「<span class="exB">青の大将</span>」<small>相手の名前だけでOK。近い2騎が向かう</small></dd>
             <dt>だれが</dt><dd>「ケンタ、<span class="exA">黄3</span>」「2番と3番、<span class="exB">青の大将</span>」</dd>
@@ -485,7 +481,7 @@
         </details>
       </section>
       <section class="panel">
-        <h2>あなたのチーム <span class="h2note">番号・クリックで選んで指示</span></h2>
+        <h2>あなたのチーム <span class="h2note">名前か番号で呼べます</span></h2>
         <ol id="roster"></ol>
       </section>
       <section class="panel grow">
@@ -494,17 +490,11 @@
       </section>
       <section class="panel keys">
         <kbd>WASD</kbd><span class="wide">騎馬を動かす（矢印キーも可・Shift でダッシュ）</span>
-        <kbd>2〜5</kbd><span class="wide">指示する仲間を選ぶ（仲間をクリックでも）</span>
-        <kbd>クリック</kbd><span class="wide">敵：狙わせる／大将：守らせる</span>
+        <kbd>Space</kbd><span class="wide">気合いだー！（12秒間 仲間の動きアップ）</span>
+        <span class="wide keynote">ほかの指示は、すべて声で</span>
         <kbd>V</kbd><span>マイク</span>
-        <kbd>R</kbd><span>気合いだー</span>
-        <kbd>Z</kbd><span>全員突撃</span>
-        <kbd>X</kbd><span>全員集まれ</span>
-        <kbd>T</kbd><span>近くの敵を集中</span>
-        <kbd>F</kbd><span>おまかせ</span>
         <kbd>C</kbd><span>カメラ</span>
         <kbd>P</kbd><span>一時停止</span>
-        <kbd>Esc</kbd><span>選択を解除</span>
         <div class="row-btn"><button id="muteBtn" class="ghost">音：ON（M）</button></div>
       </section>
     </aside>
@@ -533,20 +523,17 @@
     </div>
 
     <ul class="rules">
-      <li><b>V キー</b>でマイクON。「<b class="exA">黄3</b>」「<b class="exB">青の大将</b>」と相手の名前を言えば攻撃。「<b>守れ</b>」「<b>集まれ</b>」「<b>気合いだー！</b>」も使える（Chrome・Edge推奨）</li>
-      <li>マイクがなくても、<b>数字キー</b>か<b>クリック</b>で仲間を選び、<b>敵をクリック</b>すれば狙わせられる</li>
-      <li>攻めに出しすぎると、戦えないあなたが丸はだかに。<b>攻めと守りの配分</b>が勝負</li>
+      <li><b>声で指示する</b>ゲーム。スタートするとマイクがONになる（Chrome・Edge推奨。ヘッドホンがおすすめ）</li>
+      <li>「<b class="exA">黄3</b>」「<b class="exB">青の大将</b>」と相手の名前を言えば攻撃。「<b>守れ</b>」「<b>集まれ</b>」「<b>突撃</b>」なども使える</li>
+      <li>キーは<b>移動（WASD）</b>と<b>気合い（Space）</b>だけ。攻めに出しすぎると、戦えないあなたが丸はだかに</li>
       <li>大将（★）の鉢巻きを取られたチームは全員退場。3分たったら、取った鉢巻きの数で判定</li>
     </ul>
     <div class="keyline">
       <span><kbd>WASD</kbd> 騎馬を動かす</span>
-      <span><kbd>2</kbd>〜<kbd>5</kbd> 仲間を選ぶ</span>
-      <span><kbd>Z</kbd> 突撃</span>
-      <span><kbd>X</kbd> 守れ</span>
-      <span><kbd>T</kbd> 近くの敵</span>
-      <span><kbd>F</kbd> おまかせ</span>
-      <span><kbd>R</kbd> 気合いだー</span>
+      <span><kbd>Space</kbd> 気合いだー</span>
+      <span><kbd>V</kbd> マイク</span>
       <span><kbd>C</kbd> カメラ</span>
+      <span>ほかの指示は声で</span>
     </div>
     <button class="primary" id="startBtn">スタート<small>Enter</small></button>
   </div>
@@ -572,7 +559,7 @@
     <h2 class="res-title" id="mhTitle" style="font-size:28px;line-height:1.35"></h2>
     <p class="res-sub" id="mhLead"></p>
     <ol class="steps" id="mhSteps"></ol>
-    <p class="mh-note">マイクが使えなくても、右の入力欄に文字で打つか、キー（Z 全員突撃／X 全員集まれ／T 近くの敵を集中／F おまかせ／R 気合いだー）や、敵のクリックで指示できます。</p>
+    <p class="mh-note">マイクが使えなくても、右の入力欄に文字で打つか、キーで指示できます（気合いは Space キー）。</p>
     <button class="primary" id="mhRetry">もう一度マイクを試す</button>
     <button class="secondary" id="mhClose">閉じる（Esc）</button>
   </div>
@@ -925,7 +912,7 @@ const Sound = {
   },
   refreshMusic() {
     if (!this.music) return;
-    const target = this.ducked ? 0.2 : voice.on ? 0.5 : 1;
+    const target = this.ducked ? 0.12 : voice.on ? 0.32 : 1;
     this.music.gain.setTargetAtTime(target, this.ctx.currentTime, 0.08);
   },
 
@@ -1009,7 +996,6 @@ const game = {
   dangerT: 1,
   said30: false,
   hype: 0,           // 盛り上がり（歓声・太鼓の強さ）
-  sel: new Set(),    // 数字キー・クリックで選んだ、次の指示を受ける仲間の番号
   cmdCount: 0,       // 出した指示の数
   manualT: 0,        // ロボット大将の騎馬を、あなたがキーで動かしている（残り秒数。0 なら仲間まかせ）
   celebrate: false,  // 勝ったあとの胴上げ・ほめたたえる場面
@@ -1076,7 +1062,6 @@ function newMatch(demo) {
     cmdCount: 0, celebrate: false, celebT: 0, praise: [], feelings: new Set(), manualT: 0,
   });
   thoughtQ.length = 0;
-  game.sel.clear();
   for (const k of TEAM_KEYS) teamBrain(k);
   keys.clear();
   rebuildWorld();
@@ -1689,12 +1674,10 @@ function followCommand(r, enemies) {
 // ============================================================
 // ---------- ロボット大将（あなた） ----------
 //   体がないので、鉢巻きは取れない。騎馬は担いでいる仲間が動かす
-//   あなたにできるのは指示だけ：
+//   操作は「移動」と「気合い」だけ。ほかの指示はすべて声で出す（マイクが使えないときは文字入力）
 //   ・WASD／矢印キー（ゲームパッドのスティックも可）：担いでいる仲間に「こっちへ」と伝えて騎馬を動かす
 //     （Shift でダッシュ。キーを離して3秒たつと、仲間の判断で動く「おまかせ」に戻る：aiRobot）
-//   ・声／文字入力／キー（Z 突撃・X 集合・T 集中・F おまかせ・R 気合いだー）
-//   ・数字キー 2〜5（または仲間をクリック）で、次の指示を受ける仲間を選ぶ
-//   ・敵をクリック：選んだ仲間（いなければ近い2騎）がその敵を狙う／自分をクリック：大将を守れ
+//   ・Space（ゲームパッドの A）：気合いだー！
 const pad = { connected: false, x: 0, y: 0, dash: false, prev: [] };
 const held = (...codes) => codes.some(c => keys.has(c));
 const MANUAL_HOLD = 3;   // キーを離してから、おまかせに戻るまでの秒数
@@ -1740,58 +1723,14 @@ function robotControl(r, dt) {
   return c;
 }
 
-// 次の指示を受ける仲間を選ぶ（もう一度選ぶと外す）
-function toggleSelect(num) {
-  if (!inMatch()) return;
-  const r = game.byId.get(game.playerTeam + num);
-  if (!r || !r.alive) { showInterp(`？ ${TEAMS[game.playerTeam].name}${num} はもう退場しています`, 'err'); Sound.nope(); return; }
-  if (game.sel.has(num)) game.sel.delete(num);
-  else { game.sel.add(num); spawnPulse(r.x, r.y, '#7dd3fc'); }
-  Sound.beep();
-  updateSelUi();
-}
-function clearSelect() {
-  game.sel.clear();
-  updateSelUi();
-}
-// 選んでいる仲間を、指示の言葉の頭につける（「2番、3番、突撃」）
-function withSelected(text) {
-  const nums = [...game.sel].filter(n => { const r = game.byId.get(game.playerTeam + n); return r && r.alive; }).sort();
-  return nums.length ? `${nums.map(n => n + '番').join('、')}、${text}` : text;
-}
-
-// 3D画面のクリック：いちばん近くに見えている騎馬を選ぶ
-function riderAtScreen(px, py) {
-  let best = null, bd = 48;
-  for (const r of game.riders) {
-    if (!r.alive) continue;
-    for (const h of [40, 95]) {   // 騎馬の下のほう・騎手のあたり
-      const p = project(r.x, r.y, h);
-      if (!p.visible) continue;
-      const d = Math.hypot(p.x - px, p.y - py);
-      if (d < bd) { bd = d; best = r; }
-    }
-  }
-  return best;
-}
 const COLOR_SPOKEN = { red: '赤', blue: '青', yellow: '黄色' };
-function clickRider(r) {
-  if (!inMatch() || !r) return;
-  if (r.human) {
-    runText(withSelected('大将を守れ'), 'クリック');
-  } else if (r.team === game.playerTeam) {
-    toggleSelect(r.num);
-  } else {
-    runText(withSelected(`${COLOR_SPOKEN[r.team]}の${r.isCaptain ? '大将' : r.num + '番'}を狙え`), 'クリック');
-  }
-}
 // 言葉にして指示する（声・文字入力と同じ流れで、字幕にも出す）
 function runText(text, how) {
   showHeard(`${text}（${how}）`, true);
-  if (runParsed(parseCommand(text))) clearSelect();
+  runParsed(parseCommand(text));
 }
 
-// ゲームパッド（スティック：騎馬を動かす、トリガー：ダッシュ、A：全員突撃、B：全員集合、X：気合い、Y：マイク、LB：近くの敵を集中、RB：おまかせ、Back：カメラ、Start：開始・一時停止）
+// ゲームパッド（スティック：騎馬を動かす、トリガー：ダッシュ、A：気合いだー、Y：マイク、Back：カメラ、Start：開始・一時停止）
 function pollPad() {
   const gp = navigator.getGamepads ? [...navigator.getGamepads()].find(p => p && p.connected) : null;
   pad.connected = !!gp;
@@ -1802,13 +1741,7 @@ function pollPad() {
   pad.y = dz(gp.axes[1] || 0) || (b(13) ? 1 : 0) - (b(12) ? 1 : 0);
   pad.dash = b(7) || b(6);
   const edge = i => b(i) && !pad.prev[i];
-  if (inMatch()) {
-    if (edge(0)) quickCommand('charge');
-    if (edge(1)) quickCommand('gather');
-    if (edge(2)) quickCommand('rally');
-    if (edge(4)) quickCommand('focus');
-    if (edge(5)) quickCommand('auto');
-  }
+  if (inMatch() && edge(0)) quickCommand('rally');
   if (edge(3)) setMic(!voice.on);
   if (edge(8)) toggleCamera();
   if (edge(9)) { if (storyOpen()) advanceStory(); else if (!titleEl.hidden) startFromTitle(); else if (game.state === 'over') startMatch(); else togglePause(); }
@@ -2238,7 +2171,7 @@ const COLOR_WORDS = [
 ];
 const WORDS = [
   ...COLOR_WORDS.flatMap(([team, ws]) => ws.map(w => ({ w, kind: 'color', team }))),
-  ...['大将', 'たいしょう', 'タイショウ'].map(w => ({ w, kind: 'captain' })),
+  ...['大将', 'たいしょう', 'タイショウ', '対象', '大正', '対照', '対称', '隊商'].map(w => ({ w, kind: 'captain' })),   // 「たいしょう」はよく「対象」と聞き取られる
   ...['全員', 'ぜんいん', 'みんな', '皆', '全部', 'ぜんぶ', '全軍', '全体'].map(w => ({ w, kind: 'all' })),
   ...['俺', 'おれ', 'オレ', '私', 'わたし', '僕', 'ぼく', '自分', 'じぶん', 'あたし', 'ロボット', 'ロボ', 'AI', 'エーアイ'].map(w => ({ w, kind: 'self' })),
   // 仲間の名前（音声認識は漢字で返すこともある）
@@ -2247,8 +2180,11 @@ const WORDS = [
 ].sort((a, b) => b.w.length - a.w.length);
 
 // 士気を上げる掛け声は「気合いだー！」
-//   音声認識は短い言葉を聞き間違えやすいので、よくある聞き間違い（期待だ・機会だ など）も受け付ける
-const RALLY_RE = /気合|氣合|きあい|キアイ|木合|気愛|期待だ|機会だ|来たいだ|きたいだ/;
+const RALLY_RE = /気合|氣合|きあい|キアイ/;
+// 「きあい」は短いので、音声認識がよく似た言葉にしてしまう（試合・具合・機会・期待 など）。
+// ほかの指示として読めない短い言葉なら、これも気合いとみなす
+const RALLY_SOUNDALIKE = /試合|しあい|具合|ぐあい|場合|機会|機械|期待|来たい|木合|気愛|喜愛|見合い|似合い|キャイ|きゃい|kiai/i;
+const isShort = text => text.replace(/[、ーっッ〜~]/g, '').length <= 6;
 
 // 上から順に判定する（「自由に攻めろ」は自由、など）
 const INTENTS = [
@@ -2268,6 +2204,10 @@ function normalizeCommand(raw) {
        .replace(/よんばん|ヨンバン|しばん/g, '4番').replace(/ごばん|ゴバン/g, '5番');
   s = s.replace(/([1-5])(晩|盤|版|ばん|バン|号)/g, '$1番');   // 「3晩」などの聞き間違い
   s = s.replace(/([1-5])([1-5])番/g, '$1番$2番');             // 「23番」→「2番3番」
+  // 色のあとの、かなの番号（「赤さん」「きいろのいち」）
+  const KANA_NUM = { いち: 1, イチ: 1, 一: 1, に: 2, ニ: 2, 二: 2, さん: 3, サン: 3, 三: 3, よん: 4, ヨン: 4, 四: 4, し: 4, ご: 5, ゴ: 5, 五: 5 };
+  s = s.replace(/(赤|青|黄色|黄|あか|あお|きいろ|アカ|アオ|キイロ)(の?)(いち|イチ|一|さん|サン|三|よん|ヨン|四|ご|ゴ|五|に|ニ|二|し)(番|ばん|バン)?(?=、|を|$)/g,
+    (m, c, no, k) => `${c}${no}${KANA_NUM[k]}番`);
   return s;
 }
 
@@ -2338,6 +2278,9 @@ function parseCommand(raw) {
   if (!intent) {
     // 命令の言葉がなくても、相手の名前（「黄3」「青の大将」「青組」）があれば、その相手を攻める
     const foe = toks.filter(t => (t.kind === 'unit' || t.kind === 'team') && t.team && t.team !== own);
+    if (!foe.length && isShort(text) && RALLY_SOUNDALIKE.test(text)) {
+      return { ok: true, text, raw, intent: 'rally', target: null, subjects: [], all: true, near: false, signature: 'rally' };
+    }
     if (!foe.length) {
       const mate = toks.find(t => t.kind === 'unit' && (t.team === null || t.team === own) && !t.captain && t.num !== 1);
       const ex = examples();
@@ -2561,14 +2504,10 @@ function runParsed(p) {
   return true;
 }
 
-// キーボードでの指示（マイクが使えないとき用）
+// キーでの指示（キーで出せるのは「気合いだー」だけ。ほかは声で）
 function quickCommand(kind) {
-  // 数字キーで仲間を選んでいれば、その仲間だけに出す
-  const sel = game.sel.size > 0;
-  const texts = sel
-    ? { charge: '突撃', gather: '大将を守れ', focus: '近くの敵を狙え', auto: '自由に戦え', rally: '気合いだー！' }
-    : { charge: '全員、突撃', gather: '全員、集まれ', focus: '近くの敵を狙え', auto: '全員、自由に戦え', rally: '気合いだー！' };
-  runText(kind === 'rally' ? texts.rally : withSelected(texts[kind]), 'キー');
+  const texts = { rally: '気合いだー！', charge: '全員、突撃', gather: '全員、集まれ', focus: '近くの敵を狙え', auto: '全員、自由に戦え' };
+  runText(texts[kind], 'キー');
 }
 
 // ============================================================
@@ -2706,7 +2645,7 @@ function createRecognizer() {
   rec.lang = 'ja-JP';
   rec.continuous = true;
   rec.interimResults = true;
-  rec.maxAlternatives = 3;
+  rec.maxAlternatives = 5;
   rec.onstart = () => {
     voice.running = true;
     voice.session++;
@@ -2847,7 +2786,8 @@ const Talk = {
     return true;
   },
   utter(text, pitch, rate) {
-    const u = new SpeechSynthesisUtterance(text);
+    // 読み方の指定：「AIくん」は「エーアイきみ」と読まれることがあるので、カナにして渡す
+    const u = new SpeechSynthesisUtterance(text.replace(/AI/g, 'エーアイ'));
     u.lang = 'ja-JP';
     if (this.voice) u.voice = this.voice;
     u.pitch = pitch ?? 1;
@@ -3564,47 +3504,17 @@ function syncRider(r, m, time) {
   }
 }
 
-// 選んだ仲間の足元の輪（数字キー・クリックで選択中）
-const selMat = overlayMat('#7dd3fc', 0.9);
-const selRings = Array.from({ length: UNITS }, () => {
-  const m = flat(new THREE.RingGeometry(34, 40, 40), selMat, 0, 1.25, 0);
-  m.renderOrder = 3;
-  m.visible = false;
-  return m;
-});
-const hover = { id: null, x: 0, y: 0 };   // マウスを乗せている騎馬
-
 function syncMarkers(time) {
   const me = humanRider();
   reachGroup.visible = false;
   targetRing.visible = false;
+  lockGroup.visible = false;
+  hintEl.style.display = 'none';
   meRing.visible = !!(me && me.alive && !game.demo);
   if (meRing.visible) {
     meRing.position.set(wx(me.x), 1.1, wz(me.y));
     meMat.opacity = 0.55 + 0.3 * Math.sin(time * 4);
   }
-  // 選んでいる仲間
-  const sel = inMatch() ? [...game.sel].map(n => game.byId.get(game.playerTeam + n)).filter(r => r && r.alive) : [];
-  selRings.forEach((m, i) => {
-    const r = sel[i];
-    m.visible = !!r;
-    if (r) { m.position.set(wx(r.x), 1.25, wz(r.y)); m.scale.setScalar(1 + 0.06 * Math.sin(time * 6)); }
-  });
-  // マウスを乗せている騎馬：クリックすると何が起きるかを出す
-  const h = inMatch() && hover.id ? game.byId.get(hover.id) : null;
-  lockGroup.visible = !!(h && h.alive);
-  hintEl.style.display = 'none';
-  if (!lockGroup.visible) return;
-  lockGroup.position.set(wx(h.x), 1.5, wz(h.y));
-  lockGroup.rotation.y = time * 2.5;
-  const mine = h.team === game.playerTeam;
-  lockMat.color.set(mine ? '#7dd3fc' : TEAMS[h.team].color);
-  const p = project(h.x, h.y, 0);
-  if (!p.visible) return;
-  hintEl.style.display = '';
-  hintEl.style.color = mine ? '#7dd3fc' : '#ffffff';
-  hintEl.textContent = h.human ? 'クリック：大将を守らせる' : mine ? (game.sel.has(h.num) ? 'クリック：選ぶのをやめる' : 'クリック：この仲間を選ぶ') : 'クリック：この敵を狙わせる';
-  hintEl.style.transform = `translate(${p.x}px, ${p.y + 26}px) translate(-50%, 0)`;
 }
 
 // ---------- カメラ ----------
@@ -3859,7 +3769,6 @@ function updateLabels(dt) {
     el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%) scale(${sc.toFixed(3)})`;
     el.classList.toggle('out', !r.alive);
     el.classList.toggle('cmd', r.alive && !!r.command);
-    el.classList.toggle('sel', r.alive && !r.human && r.team === game.playerTeam && game.sel.has(r.num) && inMatch());
   }
   for (let i = pops.length - 1; i >= 0; i--) {
     const pp = pops[i];
@@ -3988,14 +3897,11 @@ function buildHud() {
   const T = TEAMS[game.playerTeam];
   rosterEl.innerHTML = Array.from({ length: UNITS }, (_, i) => i === 0
     ? `<li data-id="${game.playerTeam}1"><span class="tag ${game.playerTeam}">★1</span><b class="nm">AIくん</b><span class="desc"></span></li>`
-    : `<li class="pick" data-id="${game.playerTeam}${i + 1}" data-num="${i + 1}"><span class="tag ${game.playerTeam}">${T.name}${i + 1}</span><b class="nm">${NAMES[i + 1]}</b><span class="desc"></span><span class="key">${i + 1}</span></li>`
+    : `<li data-id="${game.playerTeam}${i + 1}"><span class="tag ${game.playerTeam}">${T.name}${i + 1}</span><b class="nm">${NAMES[i + 1]}</b><span class="desc"></span></li>`
   ).join('');
   updateHud();
 }
-// 選んでいる仲間を、名簿にも出す
-function updateSelUi() {
-  for (const li of rosterEl.children) li.classList.toggle('sel', !!li.dataset.num && game.sel.has(+li.dataset.num));
-}
+
 
 function describe(r) {
   if (!r.alive) return '<span class="muted">退場</span>';
@@ -4060,6 +3966,8 @@ function updateHud() {
 function startMatch() {
   Sound.init();
   Talk.stop();
+  // 声で指示するゲームなので、はじめての試合ではマイクを自動でONにする（あとで V で切りかえられる）
+  if (!voice.on && voice.SR && !voice.autoTried) { voice.autoTried = true; setMic(true); }
   newMatch(false);
   titleEl.hidden = true;
   resultEl.hidden = true;
@@ -4069,8 +3977,8 @@ function startMatch() {
   cam.snap = true;
   cam.fov = CAM_MODES[cam.mode].fov;
   addLog(`${TEAMS[game.playerTeam].full}の大将・AIくんとして出陣！ あなたは戦えない。指示でみんなを導こう`);
-  addLog('数字キー 2〜5 や仲間のクリックで選び、敵をクリックすると狙わせられます。Z 突撃／X 集合');
-  addLog('WASD（矢印キー）で、あなたを担ぐ騎馬を動かせます。離して3秒たつと仲間まかせに戻ります');
+  addLog(`指示は声で：「${examples().a}」「${examples().b}」で攻撃、「守れ」「集まれ」「突撃」`);
+  addLog('キーは WASD（移動）と Space（気合いだー）だけ。移動キーを離して3秒たつと仲間まかせに戻ります');
   if (!voice.on) addLog('V キーでマイクをONにすると、声で味方に指示できます');
   game.state = 'countdown';
   game.countdown = 3;
@@ -4225,42 +4133,16 @@ window.addEventListener('keydown', e => {
     else if (game.state === 'ending' && game.celebrate) game.endTimer = 0;   // 胴上げを飛ばす
     return;
   }
-  if (e.code === 'Escape' && game.sel.size && inMatch()) { clearSelect(); return; }   // 選んだ仲間を外す
   if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); return; }
   if (e.repeat) return;
-  const num = /^(Digit|Numpad)([2-5])$/.exec(e.code);
-  if (num) { toggleSelect(+num[2]); return; }
+  // キーの操作は「移動（WASD・矢印）」と「気合い（Space）」だけ。あとは声で指示する
   switch (e.code) {
+    case 'Space': if (inMatch()) quickCommand('rally'); return;
     case 'KeyM': toggleMute(); return;
     case 'KeyV': setMic(!voice.on); return;
     case 'KeyC': toggleCamera(); return;
-    case 'KeyZ': if (inMatch()) quickCommand('charge'); return;
-    case 'KeyX': if (inMatch()) quickCommand('gather'); return;
-    case 'KeyT': if (inMatch()) quickCommand('focus'); return;
-    case 'KeyF': if (inMatch()) quickCommand('auto'); return;
-    case 'KeyR': if (inMatch()) quickCommand('rally'); return;
   }
   keys.add(e.code);
-});
-// 3D画面のクリック・マウスを乗せたとき
-function canvasPoint(e) {
-  const rect = canvas.getBoundingClientRect();
-  return [(e.clientX - rect.left) / rect.width * view.w, (e.clientY - rect.top) / rect.height * view.h];
-}
-canvas.addEventListener('click', e => {
-  if (!inMatch()) return;
-  const r = riderAtScreen(...canvasPoint(e));
-  if (r) clickRider(r);
-});
-canvas.addEventListener('mousemove', e => {
-  const r = inMatch() ? riderAtScreen(...canvasPoint(e)) : null;
-  hover.id = r ? r.id : null;
-  canvas.style.cursor = r ? 'pointer' : '';
-});
-canvas.addEventListener('mouseleave', () => { hover.id = null; });
-rosterEl.addEventListener('click', e => {
-  const li = e.target.closest('li[data-num]');
-  if (li) toggleSelect(+li.dataset.num);
 });
 window.addEventListener('keyup', e => keys.delete(e.code));
 window.addEventListener('blur', () => keys.clear());
@@ -4422,7 +4304,7 @@ openTitle();
 requestAnimationFrame(frame);
 
 // デバッグ用（ブラウザの開発者ツールから試せる）
-window.kibasen = { game, update, STEP, newMatch, startMatch, parseCommand, planCommand, runParsed, humanRider, grabChance, canGrab, capture, teamBrain, voice, setMic, camera, cam, drawFrame, updateHud, toggleCamera, quickCommand, toggleSelect, clickRider, story, advanceStory, endStory, onSpeech, isEcho, Talk, Sound, pad, mic, showMicHelp, updateMicMeter, updateBodySounds, panFor };
+window.kibasen = { game, update, STEP, newMatch, startMatch, parseCommand, planCommand, runParsed, humanRider, grabChance, canGrab, capture, teamBrain, voice, setMic, camera, cam, drawFrame, updateHud, toggleCamera, quickCommand, story, advanceStory, endStory, onSpeech, isEcho, Talk, Sound, pad, mic, showMicHelp, updateMicMeter, updateBodySounds, panFor };
 </script>
 </body>
 </html>
